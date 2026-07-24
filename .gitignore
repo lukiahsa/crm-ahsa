@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Rahasia dan konfigurasi
+.env
+credentials.json
+token.json
+
+# Data customer
+data/*.xlsx
+data/*.csv
+data/*.json
+data/*.txt
+
+# Editor dan sistem
+.vscode/
+.DS_Store
+Thumbs.db
