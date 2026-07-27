@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>{{ supplier["nama_supplier"] }}</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#eef2f5;font-family:Arial,sans-serif;color:#17212b}
+.container{width:min(1120px,calc(100% - 28px));margin:28px auto}.head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:16px}h1{margin:0;color:#0b4388}.code{font-family:Consolas,monospace;font-weight:800;color:#6d7882;margin-top:5px}
+.btn{display:inline-block;padding:10px 14px;border-radius:7px;text-decoration:none;font-weight:800;border:0;cursor:pointer}.blue{background:#0b4388;color:#fff}.gray{background:#fff;color:#17212b;border:1px solid #cbd6df}.red{background:#b3261e;color:#fff}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:13px;margin-bottom:15px}.stat,.card{background:#fff;border-radius:11px;box-shadow:0 3px 15px rgba(20,40,60,.08);border:1px solid #e3e9ee}.stat{padding:17px}.stat small{display:block;color:#6d7882;font-weight:700}.stat strong{display:block;font-size:22px;color:#0b4388;margin-top:7px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}.card{padding:20px}.full{grid-column:1/-1}.title{margin:0 0 13px;color:#0b4388;font-size:14px;border-bottom:1px solid #e3e9ee;padding-bottom:8px}.info{display:grid;grid-template-columns:145px 1fr;gap:8px;font-size:12px;line-height:1.5}.info dt{font-weight:800;color:#66737e}.info dd{margin:0;white-space:pre-line}.badge{display:inline-block;padding:5px 9px;border-radius:999px;font-weight:800;font-size:10px}.active{background:#dcf5e6;color:#087a37}.inactive{background:#e8edf2;color:#596774}
+table{width:100%;border-collapse:collapse}th,td{padding:10px;border-bottom:1px solid #e3e9ee;text-align:left;font-size:12px}th{background:#f3f6f8}.empty{text-align:center;color:#78848e;padding:25px}.bottom{display:flex;justify-content:flex-end;margin-top:15px}.danger-form{display:inline}
+@media(max-width:780px){.stats,.grid{grid-template-columns:1fr}.full{grid-column:auto}.head{flex-direction:column}.info{grid-template-columns:110px 1fr}}
+</style>
+</head>
+<body>
+<main class="container">
+<div class="head">
+<div><h1>{{ supplier["nama_supplier"] }}</h1><div class="code">{{ supplier["kode_supplier"] }} · {{ supplier["jenis_supplier"] }}</div></div>
+<div><a class="btn gray" href="{{ url_for('suppliers') }}">Daftar Supplier</a> <a class="btn blue" href="{{ url_for('edit_supplier', supplier_id=supplier['id']) }}">Edit Supplier</a></div>
+</div>
+
+<section class="stats">
+<div class="stat"><small>Status</small><strong><span class="badge {% if supplier['status']=='Aktif' %}active{% else %}inactive{% endif %}">{{ supplier["status"] }}</span></strong></div>
+<div class="stat"><small>Total Purchase Order</small><strong>{{ purchase_summary["total_po"] or 0 }}</strong></div>
+<div class="stat"><small>Total Nilai Pembelian</small><strong>{{ format_rupiah(purchase_summary["total_nilai"] or 0) }}</strong></div>
+</section>
+
+<section class="grid">
+<article class="card">
+<h2 class="title">Identitas dan Alamat</h2>
+<dl class="info">
+<dt>Nama Supplier</dt><dd>{{ supplier["nama_supplier"] }}</dd>
+<dt>Jenis</dt><dd>{{ supplier["jenis_supplier"] }}</dd>
+<dt>NPWP</dt><dd>{{ supplier["npwp"] or "-" }}</dd>
+<dt>Alamat</dt><dd>{{ supplier["alamat"] or "-" }}</dd>
+<dt>Kota</dt><dd>{{ supplier["kota"] or "-" }}</dd>
+<dt>Provinsi</dt><dd>{{ supplier["provinsi"] or "-" }}</dd>
+<dt>Kode Pos</dt><dd>{{ supplier["kode_pos"] or "-" }}</dd>
+<dt>Website</dt><dd>{{ supplier["website"] or "-" }}</dd>
+</dl>
+</article>
+
+<article class="card">
+<h2 class="title">PIC dan Kontak</h2>
+<dl class="info">
+<dt>PIC</dt><dd>{{ supplier["pic"] or "-" }}</dd>
+<dt>Jabatan</dt><dd>{{ supplier["jabatan"] or "-" }}</dd>
+<dt>Telepon</dt><dd>{{ supplier["telepon"] or "-" }}</dd>
+<dt>WhatsApp</dt><dd>{{ supplier["whatsapp"] or "-" }}</dd>
+<dt>Email</dt><dd>{{ supplier["email"] or "-" }}</dd>
+<dt>Payment Term</dt><dd>{% if supplier["payment_term"] %}{{ supplier["payment_term"] }} hari{% else %}Tunai / Sesuai PO{% endif %}</dd>
+</dl>
+</article>
+
+<article class="card">
+<h2 class="title">Rekening Supplier</h2>
+<dl class="info">
+<dt>Bank</dt><dd>{{ supplier["bank"] or "-" }}</dd>
+<dt>No. Rekening</dt><dd>{{ supplier["no_rekening"] or "-" }}</dd>
+<dt>Atas Nama</dt><dd>{{ supplier["atas_nama"] or "-" }}</dd>
+</dl>
+</article>
+
+<article class="card">
+<h2 class="title">Catatan</h2>
+<div style="font-size:12px;line-height:1.6;white-space:pre-line">{{ supplier["catatan"] or "Belum ada catatan." }}</div>
+</article>
+
+<article class="card full">
+<h2 class="title">Riwayat Purchase Order</h2>
+<table>
+<thead><tr><th>Nomor PO</th><th>Tanggal</th><th>Status</th><th>Grand Total</th></tr></thead>
+<tbody>
+{% for po in purchase_summary["purchase_orders"] %}
+<tr><td>{{ po["nomor_po"] }}</td><td>{{ po["tanggal"] }}</td><td>{{ po["status"] }}</td><td>{{ format_rupiah(po["grand_total"]) }}</td></tr>
+{% else %}
+<tr><td colspan="4" class="empty">Belum ada Purchase Order untuk supplier ini.</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</article>
+</section>
+
+<div class="bottom">
+<form class="danger-form" method="POST" action="{{ url_for('delete_supplier', supplier_id=supplier['id']) }}" onsubmit="return confirm('Hapus supplier ini? Data yang dihapus tidak dapat dikembalikan.');">
+<button class="btn red" type="submit">Hapus Supplier</button>
+</form>
+</div>
+</main>
+</body>
+</html>

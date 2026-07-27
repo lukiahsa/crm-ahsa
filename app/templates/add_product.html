@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Tambah Produk</title>
+
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f4f6f8;
+            color: #222;
+        }
+
+        .container {
+            width: 92%;
+            max-width: 900px;
+            margin: 30px auto;
+        }
+
+        .header {
+            margin-bottom: 20px;
+        }
+
+        .header h1 {
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            margin: 0;
+            color: #666;
+        }
+
+        .card {
+            background: white;
+            padding: 24px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 18px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group.full {
+            grid-column: 1 / -1;
+        }
+
+        label {
+            margin-bottom: 7px;
+            font-weight: bold;
+        }
+
+        input,
+        select {
+            padding: 11px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        input:focus,
+        select:focus {
+            outline: none;
+            border-color: #198754;
+        }
+
+        .note {
+            margin-top: 6px;
+            font-size: 12px;
+            color: #777;
+        }
+
+        .actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 24px;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 11px 18px;
+            border-radius: 7px;
+            text-decoration: none;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .btn-primary {
+            background: #198754;
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        @media (max-width: 700px) {
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .form-group.full {
+                grid-column: auto;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+
+        <div class="header">
+            <h1>Tambah Produk</h1>
+            <p>Masukkan produk baru ke Master Produk.</p>
+        </div>
+
+        <div class="card">
+            <form method="POST">
+
+                <div class="form-grid">
+
+                    <div class="form-group">
+                        <label for="kode_produk">Kode Produk / SKU</label>
+                        <input
+                            type="text"
+                            id="kode_produk"
+                            name="kode_produk"
+                            placeholder="Contoh: DB120-R-HJ"
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="nama_produk">Nama Produk *</label>
+                        <input
+                            type="text"
+                            id="nama_produk"
+                            name="nama_produk"
+                            placeholder="Contoh: Tempat Sampah 120 Liter"
+                            required
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="kategori">Kategori</label>
+                        <select id="kategori" name="kategori">
+                            <option value="">Pilih kategori</option>
+                            <option value="Tempat Sampah">Tempat Sampah</option>
+                            <option value="Tangga">Tangga</option>
+                            <option value="Material Handling">Material Handling</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="varian">Varian / Tipe</label>
+                        <input
+                            type="text"
+                            id="varian"
+                            name="varian"
+                            placeholder="Contoh: Pedal, Roda, Fiberglass"
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="warna">Warna</label>
+                          <select id="warna" name="warna">
+                            <option value="">Pilih warna</option>
+                            <option value="Hijau">Hijau</option>
+                            <option value="Kuning">Kuning</option>
+                            <option value="Biru">Biru</option>
+                            <option value="Merah">Merah</option>
+                            <option value="Abu-abu">Abu-abu</option>
+                            <option value="Hitam">Hitam</option>
+                            <option value="Putih">Putih</option>
+                            <option value="Orange">Orange</option>
+                            <option value="-">Tidak Ada Warna</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ukuran">Ukuran / Kapasitas</label>
+                        <input
+                            type="text"
+                            id="ukuran"
+                            name="ukuran"
+                            placeholder="Contoh: 120 Liter, 4 Meter, 3 Ton"
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="satuan">Satuan</label>
+                        <select id="satuan" name="satuan">
+                            <option value="Unit">Unit</option>
+                            <option value="Set">Set</option>
+                            <option value="Pcs">Pcs</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="status_aktif">Status</label>
+                        <select id="status_aktif" name="status_aktif">
+                            <option value="1">Aktif</option>
+                            <option value="0">Nonaktif</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="harga_jual_default">Harga Jual Default</label>
+                        <input
+                            type="number"
+                            id="harga_jual_default"
+                            name="harga_jual_default"
+                            min="0"
+                            value="0"
+                            placeholder="Contoh: 415000"
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="harga_modal_default">Harga Modal Default</label>
+                        <input
+                            type="number"
+                            id="harga_modal_default"
+                            name="harga_modal_default"
+                            min="0"
+                            value="0"
+                            placeholder="Contoh: 318000"
+                        >
+
+                        <div class="note">
+                            Untuk Material Handling boleh dikosongkan atau isi 0.
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="actions">
+                    <a href="{{ url_for('products') }}" class="btn btn-secondary">
+                        Batal
+                    </a>
+
+                    <button type="submit" class="btn btn-primary">
+                        Simpan Produk
+                    </button>
+                </div>
+
+            </form>
+        </div>
+
+    </div>
+</body>
+</html>

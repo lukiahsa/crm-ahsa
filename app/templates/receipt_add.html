@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Buat Kwitansi</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#eef2f5;font-family:Arial,sans-serif;color:#17212b}.container{width:min(1100px,calc(100% - 28px));margin:26px auto}
+.head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:16px}h1{margin:0;color:#0b4388}.sub{color:#687580;margin-top:5px}
+.card{background:#fff;border-radius:10px;box-shadow:0 3px 16px rgba(20,40,60,.1);padding:20px;margin-bottom:16px}.title{font-size:17px;font-weight:900;color:#0b4388;margin-bottom:14px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.full{grid-column:1/-1}.info{padding:11px;border:1px solid #d7e0e7;border-radius:8px;background:#f8fafb}.info small{display:block;color:#6d7882;margin-bottom:4px}
+label{display:block;font-weight:700;margin-bottom:6px;font-size:12px}input,select,textarea{width:100%;padding:10px;border:1px solid #cad6df;border-radius:7px;font-size:13px}textarea{min-height:85px;resize:vertical}
+.money{font-size:20px;color:#12933f;font-weight:900}.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.actions{display:flex;justify-content:flex-end;gap:9px}.btn{display:inline-block;padding:10px 15px;border:0;border-radius:7px;text-decoration:none;font-weight:800;cursor:pointer}.green{background:#159447;color:#fff}.gray{background:#6d7882;color:#fff}
+@media(max-width:800px){.grid,.summary{grid-template-columns:1fr}.full{grid-column:auto}.head{flex-direction:column}}
+</style>
+</head>
+<body>
+<main class="container">
+<div class="head"><div><div class="sub" style="font-weight:800;letter-spacing:1px">KWITANSI</div><h1>Buat Kwitansi Pembayaran</h1><div class="sub">{{ invoice["nomor_invoice"] }}</div></div><a class="btn gray" href="{{ url_for('receipts') }}">Daftar Kwitansi</a></div>
+<section class="card"><div class="title">Referensi Invoice</div>
+<div class="grid">
+<div class="info"><small>Customer</small><strong>{{ invoice["customer_nama"] or "-" }}</strong></div>
+<div class="info"><small>Instansi</small><strong>{{ invoice["customer_instansi"] or "-" }}</strong></div>
+<div class="info"><small>Invoice</small><strong>{{ invoice["nomor_invoice"] }}</strong></div>
+<div class="info"><small>Transaksi</small><strong>{{ invoice["nomor_transaksi"] }}</strong></div>
+<div class="info"><small>Sales</small><strong>{{ invoice["sales"] or "-" }}</strong></div>
+<div class="info"><small>Status Pembayaran</small><strong>{{ summary["status_pembayaran"] }}</strong></div>
+</div>
+</section>
+
+<section class="card"><div class="title">Ringkasan Pembayaran</div>
+<div class="summary">
+<div class="info"><small>Total Invoice</small><div class="money">Rp {{ "{:,.0f}".format(summary["total_tagihan"]).replace(",", ".") }}</div></div>
+<div class="info"><small>Sudah Dibayar</small><div class="money">Rp {{ "{:,.0f}".format(summary["total_dibayar"]).replace(",", ".") }}</div></div>
+<div class="info"><small>Sisa Tagihan</small><div class="money">Rp {{ "{:,.0f}".format(summary["sisa_tagihan"]).replace(",", ".") }}</div></div>
+</div>
+</section>
+
+<form method="POST">
+<section class="card"><div class="title">Data Kwitansi</div>
+<div class="grid">
+<div><label>Tanggal</label><input type="date" name="tanggal" required></div>
+<div><label>Jenis Pembayaran</label><select name="jenis_pembayaran" required>{% for item in receipt_types %}<option value="{{ item }}">{{ item }}</option>{% endfor %}</select></div>
+<div><label>Metode Pembayaran</label><select name="metode_pembayaran" required>{% for item in receipt_methods %}<option value="{{ item }}">{{ item }}</option>{% endfor %}</select></div>
+<div><label>Bank</label><input name="bank" placeholder="BCA / Mandiri / lainnya"></div>
+<div><label>Nomor Referensi</label><input name="nomor_referensi" placeholder="Nomor transfer / giro"></div>
+<div><label>Nominal Pembayaran</label><input name="nominal" value="{{ summary['sisa_tagihan'] }}" required></div>
+<div class="full"><label>Untuk Pembayaran</label><input name="untuk_pembayaran" placeholder="Contoh: DP Invoice {{ invoice['nomor_invoice'] }}"></div>
+<div class="full"><label>Catatan</label><textarea name="catatan" placeholder="Catatan tambahan"></textarea></div>
+</div>
+</section>
+<div class="actions"><a class="btn gray" href="{{ url_for('receipts') }}">Batal</a><button class="btn green" type="submit">Simpan Kwitansi</button></div>
+</form>
+</main>
+</body>
+</html>

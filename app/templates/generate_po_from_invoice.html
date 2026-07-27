@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Generate PO dari Invoice</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#eef2f5;font-family:Arial,sans-serif;color:#17212b}
+.container{width:min(1100px,calc(100% - 28px));margin:28px auto}
+.head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;margin-bottom:16px}
+h1{margin:0;color:#0b4388}.sub{margin-top:6px;color:#6d7882}
+.card{background:#fff;border-radius:11px;padding:20px;margin-bottom:15px;box-shadow:0 3px 15px rgba(20,40,60,.08)}
+.title{margin:0 0 14px;padding-bottom:8px;border-bottom:1px solid #e2e9ee;color:#0b4388;font-size:14px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:13px}
+.full{grid-column:1/-1}
+label{display:block;font-size:11px;font-weight:800;margin-bottom:6px}
+input,select,textarea{width:100%;padding:10px;border:1px solid #cbd6df;border-radius:7px;font:inherit}
+textarea{min-height:85px;resize:vertical}
+.btn{display:inline-block;padding:10px 15px;border-radius:7px;text-decoration:none;border:0;font-weight:800;cursor:pointer}
+.blue{background:#0b4388;color:#fff}.gray{background:#6d7882;color:#fff}.green{background:#087a37;color:#fff}
+.invoice-box{display:grid;grid-template-columns:repeat(4,1fr);gap:11px}
+.info{background:#f5f8fa;border:1px solid #e0e7ec;border-radius:8px;padding:12px}
+.info small{display:block;color:#6d7882;font-weight:700}.info strong{display:block;color:#0b4388;margin-top:6px}
+table{width:100%;border-collapse:collapse}th,td{padding:10px;border-bottom:1px solid #e2e8ed;font-size:11px;text-align:left}th{background:#0b4388;color:#fff}.money{text-align:right}.warning{background:#fff6db;border:1px solid #eed17a;border-radius:8px;padding:12px;font-size:12px;line-height:1.5;margin-bottom:15px}.actions{display:flex;justify-content:flex-end;gap:8px}
+@media(max-width:780px){.grid,.invoice-box{grid-template-columns:1fr}.full{grid-column:auto}.head{flex-direction:column}.card{overflow-x:auto}table{min-width:780px}}
+</style>
+</head>
+<body>
+<main class="container">
+<div class="head">
+<div>
+<h1>🔄 Generate Purchase Order</h1>
+<div class="sub">Item dan harga modal disalin otomatis dari Invoice.</div>
+</div>
+<a class="btn gray" href="{{ url_for('transaction_detail', transaction_id=transaction['id']) }}">Kembali ke Transaksi</a>
+</div>
+
+<section class="invoice-box">
+<div class="info"><small>Invoice</small><strong>{{ invoice["nomor_invoice"] }}</strong></div>
+<div class="info"><small>Transaksi</small><strong>{{ transaction["nomor_transaksi"] }}</strong></div>
+<div class="info"><small>Customer</small><strong>{{ transaction["customer_nama"] or "-" }}</strong></div>
+<div class="info"><small>Total Modal</small><strong>{{ format_rupiah(transaction["total_modal"] or 0) }}</strong></div>
+</section>
+
+<div class="warning">
+Purchase Order akan dibuat sebagai <strong>Draft</strong>. Setelah dibuat, Anda akan diarahkan ke halaman edit PO untuk memeriksa harga, PPN, ongkir, catatan, dan item sebelum dikirim ke supplier.
+</div>
+
+<form method="POST">
+<section class="card">
+<h2 class="title">Pengaturan Purchase Order</h2>
+<div class="grid">
+<div class="full">
+<label>Supplier *</label>
+<select name="supplier_id" id="supplierId" required>
+<option value="">Pilih Supplier</option>
+{% for supplier in suppliers %}
+<option value="{{ supplier['id'] }}" data-term="{{ supplier['payment_term'] or 0 }}">
+{{ supplier["kode_supplier"] }} — {{ supplier["nama_supplier"] }}
+</option>
+{% endfor %}
+</select>
+</div>
+<div><label>Estimasi Barang Datang</label><input type="date" name="estimasi_datang"></div>
+<div><label>Payment Term (hari)</label><input type="number" min="0" name="payment_term" id="paymentTerm" value="0"></div>
+<div><label>PPN</label><select name="ppn_persen">{% for ppn in ppn_options %}<option value="{{ ppn }}">{{ ppn }}%</option>{% endfor %}</select></div>
+<div><label>Ongkir</label><input type="number" min="0" name="ongkir" value="0"></div>
+<div><label>Biaya Lain</label><input type="number" min="0" name="biaya_lain" value="0"></div>
+<div class="full"><label>Catatan</label><textarea name="catatan">Dibuat otomatis dari {{ invoice["nomor_invoice"] }}.</textarea></div>
+<div class="full"><label>Syarat & Ketentuan</label><textarea name="syarat_ketentuan">{{ default_terms }}</textarea></div>
+</div>
+</section>
+
+<section class="card">
+<h2 class="title">Item yang Akan Disalin</h2>
+<table>
+<thead><tr><th>No</th><th>Kode</th><th>Nama Barang</th><th>Qty</th><th>Satuan</th><th class="money">Harga Modal</th><th class="money">Subtotal Modal</th></tr></thead>
+<tbody>
+{% for item in items %}
+<tr>
+<td>{{ loop.index }}</td>
+<td>{{ item["kode_produk_snapshot"] or "-" }}</td>
+<td><strong>{{ item["nama_produk_snapshot"] }}</strong></td>
+<td>{{ item["qty"] }}</td>
+<td>{{ item["satuan_snapshot"] or "Unit" }}</td>
+<td class="money">{{ format_rupiah(item["harga_modal_satuan"] or 0) }}</td>
+<td class="money">{{ format_rupiah(item["subtotal_modal"] or 0) }}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</section>
+
+<div class="actions">
+<a class="btn gray" href="{{ url_for('transaction_detail', transaction_id=transaction['id']) }}">Batal</a>
+<button class="btn green" type="submit">Generate Purchase Order</button>
+</div>
+</form>
+</main>
+<script>
+document.getElementById("supplierId").addEventListener("change",function(){
+const option=this.selectedOptions[0];
+const term=document.getElementById("paymentTerm");
+if(option&&option.value&&Number(term.value)===0){term.value=option.dataset.term||0;}
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Penomoran Dokumen</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#eef2f5;font-family:Arial,sans-serif;color:#17212b}
+.container{width:min(1200px,calc(100% - 28px));margin:28px auto}.head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:18px}h1{margin:0;color:#0b4388}.sub{color:#6d7882;margin-top:6px}
+.btn{display:inline-block;padding:9px 13px;border-radius:7px;text-decoration:none;font-weight:800}.gray{background:#fff;border:1px solid #cad5dd;color:#17212b}
+.card{background:#fff;border-radius:11px;box-shadow:0 3px 15px rgba(20,40,60,.1);overflow:hidden}table{width:100%;border-collapse:collapse}th,td{padding:11px;border-bottom:1px solid #e1e8ed;font-size:12px;text-align:left}th{background:#0b4388;color:#fff;font-size:11px}
+.preview{font-family:Consolas,monospace;font-weight:800;color:#0b4388}.badge{display:inline-block;padding:5px 9px;border-radius:999px;font-weight:800}.on{background:#dcf5e6;color:#087a37}.off{background:#e8eef5;color:#526579}
+.note{margin-top:15px;background:#fff8df;border:1px solid #efd97b;padding:12px;border-radius:8px;font-size:12px;line-height:1.5}
+@media(max-width:800px){.card{overflow-x:auto}.head{flex-direction:column}table{min-width:900px}}
+</style>
+</head>
+<body>
+<main class="container">
+<div class="head"><div><h1>🔢 Penomoran Dokumen</h1><div class="sub">Format nomor terpusat untuk seluruh modul ERP.</div></div><a class="btn gray" href="{{ url_for('settings_home') }}">Pengaturan ERP</a></div>
+<section class="card">
+<table>
+<thead><tr><th>Dokumen</th><th>Tipe</th><th>Prefix</th><th>Contoh Nomor Berikutnya</th><th>Reset</th><th>Running Terakhir</th><th>Status</th><th>Aksi</th></tr></thead>
+<tbody>
+{% for row in numberings %}
+<tr>
+<td><strong>{{ row["document_name"] }}</strong></td>
+<td>{{ row["document_type"] }}</td>
+<td>{{ row["prefix"] }}</td>
+<td class="preview">{{ previews[row["id"]] }}</td>
+<td>{{ row["reset_policy"] }}</td>
+<td>{{ row["last_number"] }}</td>
+<td><span class="badge {% if row['active'] %}on{% else %}off{% endif %}">{% if row["active"] %}Aktif{% else %}Nonaktif{% endif %}</span></td>
+<td><a class="btn gray" href="{{ url_for('edit_numbering_setting', numbering_id=row['id']) }}">Edit</a></td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</section>
+<div class="note"><strong>Aman:</strong> numbering engine sudah siap untuk Purchase Order. Nomor modul lama belum dialihkan otomatis agar Invoice, Quotation, Surat Jalan, Kwitansi, dan transaksi yang sudah stabil tidak terganggu.</div>
+</main>
+</body>
+</html>

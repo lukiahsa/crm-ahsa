@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>{{ receipt["nomor_kwitansi"] }}</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#eef2f5;font-family:Arial,sans-serif;color:#15202b}.container{width:min(1100px,calc(100% - 28px));margin:26px auto}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:16px}h1{margin:0;color:#0b4388}.sub{color:#6b7882;margin-top:5px}.actions{display:flex;gap:8px;flex-wrap:wrap}
+.btn{display:inline-block;padding:10px 14px;border-radius:7px;text-decoration:none;font-weight:800;border:0;cursor:pointer;font-size:12px}.blue{background:#0b4388;color:#fff}.green{background:#159447;color:#fff}.gray{background:#6f7c86;color:#fff}
+.card{background:#fff;border-radius:11px;padding:18px;box-shadow:0 3px 15px rgba(20,40,60,.1);margin-bottom:16px}.info{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.box{border:1px solid #d6e0e7;border-radius:8px;padding:11px}.box small{display:block;color:#6d7881;margin-bottom:5px}
+.amount{font-size:26px;color:#12933f;font-weight:900}.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.status{display:flex;gap:8px}.status select{flex:1;padding:10px;border:1px solid #cdd8e1;border-radius:7px}
+.timeline{position:relative}.activity{display:grid;grid-template-columns:18px 1fr;gap:10px;padding-bottom:15px;position:relative}.activity:not(:last-child):before{content:"";position:absolute;left:8px;top:18px;bottom:0;width:2px;background:#d9e3ea}.dot{width:18px;height:18px;border-radius:50%;background:#0b4388;border:4px solid #dcecff;z-index:1}.activity-card{border:1px solid #d6e0e7;border-radius:8px;padding:10px;background:#fbfcfd}.activity-head{display:flex;justify-content:space-between}.activity-time{font-size:10px;color:#75818a}
+@media(max-width:800px){.top{flex-direction:column}.info,.summary{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main class="container">
+<div class="top"><div><div class="sub" style="font-weight:800;letter-spacing:1px">KWITANSI</div><h1>{{ receipt["nomor_kwitansi"] }}</h1><div class="sub">Bukti pembayaran resmi Ahsa Equipment</div></div>
+<div class="actions"><a class="btn gray" href="{{ url_for('receipts') }}">Daftar</a><a class="btn blue" target="_blank" href="{{ url_for('print_receipt', receipt_id=receipt['id']) }}">📄 Preview PDF</a></div></div>
+
+<section class="card"><div class="info">
+<div class="box"><small>Customer</small><strong>{{ receipt["customer_nama"] or "-" }}</strong></div>
+<div class="box"><small>Instansi</small><strong>{{ receipt["customer_instansi"] or "-" }}</strong></div>
+<div class="box"><small>Tanggal</small><strong>{{ receipt["tanggal_format"] }}</strong></div>
+<div class="box"><small>Invoice</small><strong>{{ receipt["nomor_invoice"] }}</strong></div>
+<div class="box"><small>Jenis</small><strong>{{ receipt["jenis_pembayaran"] }}</strong></div>
+<div class="box"><small>Metode</small><strong>{{ receipt["metode_pembayaran"] }}</strong></div>
+</div></section>
+
+<section class="card">
+<div class="amount">Rp {{ "{:,.0f}".format(receipt["nominal"] or 0).replace(",", ".") }}</div>
+<p><strong>Terbilang:</strong> {{ receipt["terbilang"] }}</p>
+<p><strong>Untuk Pembayaran:</strong> {{ receipt["untuk_pembayaran"] }}</p>
+<p><strong>Bank / Referensi:</strong> {{ receipt["bank"] or "-" }} / {{ receipt["nomor_referensi"] or "-" }}</p>
+<p><strong>Catatan:</strong> {{ receipt["catatan"] or "-" }}</p>
+</section>
+
+<section class="card"><h3>Ringkasan Invoice</h3>
+<div class="summary">
+<div class="box"><small>Total Invoice</small><strong>Rp {{ "{:,.0f}".format(summary["total_tagihan"]).replace(",", ".") }}</strong></div>
+<div class="box"><small>Total Dibayar</small><strong>Rp {{ "{:,.0f}".format(summary["total_dibayar"]).replace(",", ".") }}</strong></div>
+<div class="box"><small>Sisa Tagihan</small><strong>Rp {{ "{:,.0f}".format(summary["sisa_tagihan"]).replace(",", ".") }}</strong></div>
+</div>
+<form class="status" method="POST" action="{{ url_for('update_receipt_status', receipt_id=receipt['id']) }}" style="margin-top:14px"><select name="status">{% for status in receipt_statuses %}<option value="{{ status }}" {% if status == receipt["status"] %}selected{% endif %}>{{ status }}</option>{% endfor %}</select><button class="btn green" type="submit">Ubah Status</button></form>
+</section>
+
+<section class="card"><h3>Timeline & Activity</h3><div class="timeline">
+{% if activities %}{% for activity in activities %}<div class="activity"><div class="dot"></div><div class="activity-card"><div class="activity-head"><strong>{{ activity["activity_type"]|title }}</strong><span class="activity-time">{{ activity["created_at"] }}</span></div><div>{{ activity["description"] }}</div><small>Oleh: {{ activity["created_by"] or "Sistem" }}</small></div></div>{% endfor %}{% else %}<p>Belum ada activity log.</p>{% endif %}
+</div></section>
+</main>
+</body>
+</html>

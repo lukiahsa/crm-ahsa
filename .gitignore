@@ -19,3 +19,8 @@ data/*.txt
 .vscode/
 .DS_Store
 Thumbs.db
+
+# SQLite Database
+database/*.db
+database/*.sqlite
+database/*.sqlite3

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Master Supplier</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#eef2f5;font-family:Arial,sans-serif;color:#17212b}
+.container{width:min(1240px,calc(100% - 28px));margin:28px auto}
+.head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;margin-bottom:18px}h1{margin:0;color:#0b4388}.sub{color:#6d7882;margin-top:6px}
+.btn{display:inline-block;padding:10px 14px;border-radius:7px;text-decoration:none;font-weight:800;border:0;cursor:pointer}.blue{background:#0b4388;color:#fff}.gray{background:#fff;color:#17212b;border:1px solid #cbd6df}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-bottom:16px}.stat{background:#fff;border-radius:11px;padding:17px;box-shadow:0 3px 14px rgba(20,40,60,.08);border:1px solid #e3e9ee}.stat small{display:block;color:#6d7882;font-weight:700}.stat strong{display:block;font-size:23px;color:#0b4388;margin-top:7px}
+.filter{display:grid;grid-template-columns:2fr 1fr 1fr auto auto;gap:9px;background:#fff;padding:14px;border-radius:10px;margin-bottom:14px;box-shadow:0 3px 14px rgba(20,40,60,.07)}input,select{width:100%;padding:10px;border:1px solid #cbd6df;border-radius:7px;font:inherit}
+.card{background:#fff;border-radius:11px;overflow:hidden;box-shadow:0 3px 15px rgba(20,40,60,.09)}table{width:100%;border-collapse:collapse}th,td{padding:11px;border-bottom:1px solid #e4eaee;text-align:left;font-size:12px}th{background:#0b4388;color:#fff;font-size:11px}.code{font-family:Consolas,monospace;color:#0b4388;font-weight:800}.name{font-weight:800}.muted{color:#74808b}.badge{display:inline-block;padding:5px 8px;border-radius:999px;font-weight:800;font-size:10px}.active{background:#dcf5e6;color:#087a37}.inactive{background:#e9eef3;color:#5c6974}.actions{white-space:nowrap}.actions a{margin-right:4px}.empty{text-align:center;padding:35px;color:#74808b}
+@media(max-width:900px){.stats{grid-template-columns:1fr 1fr}.filter{grid-template-columns:1fr 1fr}.card{overflow-x:auto}table{min-width:900px}.head{flex-direction:column}}
+@media(max-width:520px){.stats,.filter{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main class="container">
+<div class="head">
+<div><h1>🏭 Master Supplier</h1><div class="sub">Kelola pemasok barang dan jasa Ahsa Equipment.</div></div>
+<div><a class="btn gray" href="{{ url_for('dashboard') }}">Dashboard</a> <a class="btn blue" href="{{ url_for('add_supplier') }}">+ Supplier Baru</a></div>
+</div>
+
+<section class="stats">
+<div class="stat"><small>Total Supplier</small><strong>{{ stats["total_supplier"] or 0 }}</strong></div>
+<div class="stat"><small>Supplier Aktif</small><strong>{{ stats["supplier_aktif"] or 0 }}</strong></div>
+<div class="stat"><small>Total Purchase Order</small><strong>{{ purchase_summary["total_po"] or 0 }}</strong></div>
+<div class="stat"><small>Nilai Pembelian</small><strong>{{ format_rupiah(purchase_summary["total_nilai"] or 0) }}</strong></div>
+</section>
+
+<form class="filter" method="GET">
+<input name="q" value="{{ keyword }}" placeholder="Cari kode, supplier, PIC, WA, kota...">
+<select name="status"><option value="">Semua Status</option>{% for item in supplier_statuses %}<option value="{{ item }}" {% if status_filter==item %}selected{% endif %}>{{ item }}</option>{% endfor %}</select>
+<select name="jenis"><option value="">Semua Jenis</option>{% for item in supplier_types %}<option value="{{ item }}" {% if type_filter==item %}selected{% endif %}>{{ item }}</option>{% endfor %}</select>
+<button class="btn blue" type="submit">Cari</button>
+<a class="btn gray" href="{{ url_for('suppliers') }}">Reset</a>
+</form>
+
+<section class="card">
+<table>
+<thead><tr><th>Kode</th><th>Supplier</th><th>Jenis</th><th>PIC</th><th>WhatsApp</th><th>Kota</th><th>Termin</th><th>Status</th><th>Aksi</th></tr></thead>
+<tbody>
+{% for supplier in suppliers %}
+<tr>
+<td class="code">{{ supplier["kode_supplier"] }}</td>
+<td><div class="name">{{ supplier["nama_supplier"] }}</div><div class="muted">{{ supplier["email"] or "-" }}</div></td>
+<td>{{ supplier["jenis_supplier"] }}</td>
+<td><div>{{ supplier["pic"] or "-" }}</div><div class="muted">{{ supplier["jabatan"] or "" }}</div></td>
+<td>{{ supplier["whatsapp"] or supplier["telepon"] or "-" }}</td>
+<td>{{ supplier["kota"] or "-" }}</td>
+<td>{% if supplier["payment_term"] %}{{ supplier["payment_term"] }} hari{% else %}Tunai / Sesuai PO{% endif %}</td>
+<td><span class="badge {% if supplier['status']=='Aktif' %}active{% else %}inactive{% endif %}">{{ supplier["status"] }}</span></td>
+<td class="actions"><a class="btn gray" href="{{ url_for('supplier_detail', supplier_id=supplier['id']) }}">Detail</a><a class="btn gray" href="{{ url_for('edit_supplier', supplier_id=supplier['id']) }}">Edit</a></td>
+</tr>
+{% else %}
+<tr><td colspan="9" class="empty">Belum ada data supplier yang sesuai.</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</section>
+</main>
+</body>
+</html>

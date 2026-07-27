@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Edit Penomoran</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#eef2f5;font-family:Arial,sans-serif;color:#17212b}
+.container{width:min(820px,calc(100% - 28px));margin:30px auto}.card{background:#fff;border-radius:12px;box-shadow:0 4px 18px rgba(20,40,60,.09);padding:22px}
+h1{margin:0 0 6px;color:#0b4388}.sub{color:#6d7882;margin-bottom:18px}.preview{padding:16px;border-radius:8px;background:#eaf2ff;color:#0b4388;font-family:Consolas,monospace;font-weight:800;font-size:20px;text-align:center;margin-bottom:18px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.full{grid-column:1/-1}label{display:block;font-weight:700;margin-bottom:6px;font-size:12px}input,select{width:100%;padding:10px;border:1px solid #cbd6df;border-radius:7px;font:inherit}
+.check{display:flex;align-items:center;gap:8px;border:1px solid #d8e1e8;padding:10px;border-radius:7px}.check input{width:auto}
+.actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px}.btn{padding:10px 15px;border:0;border-radius:7px;text-decoration:none;font-weight:800;cursor:pointer}.blue{background:#0b4388;color:#fff}.gray{background:#6d7882;color:#fff}
+@media(max-width:650px){.grid{grid-template-columns:1fr}.full{grid-column:auto}}
+</style>
+</head>
+<body>
+<main class="container"><section class="card">
+<h1>Edit Penomoran</h1>
+<div class="sub">{{ numbering["document_type"] }}</div>
+<div class="preview">{{ preview }}</div>
+<form method="POST">
+<div class="grid">
+<div class="full"><label>Nama Dokumen</label><input name="document_name" value="{{ numbering['document_name'] }}" required></div>
+<div><label>Prefix</label><input name="prefix" value="{{ numbering['prefix'] }}" required></div>
+<div><label>Pemisah</label><select name="separator"><option value="/" {% if numbering["separator"]=="/" %}selected{% endif %}>/</option><option value="-" {% if numbering["separator"]=="-" %}selected{% endif %}>-</option><option value="." {% if numbering["separator"]=="." %}selected{% endif %}>.</option><option value="" {% if numbering["separator"]=="" %}selected{% endif %}>Tanpa pemisah</option></select></div>
+<div><label>Panjang Running Number</label><input type="number" min="3" max="10" name="running_length" value="{{ numbering['running_length'] }}" required></div>
+<div><label>Kebijakan Reset</label><select name="reset_policy">{% for policy in reset_policies %}<option value="{{ policy }}" {% if numbering["reset_policy"]==policy %}selected{% endif %}>{{ policy }}</option>{% endfor %}</select></div>
+<div class="check"><input type="checkbox" name="include_year" value="1" {% if numbering["include_year"] %}checked{% endif %}><label style="margin:0">Masukkan Tahun</label></div>
+<div class="check"><input type="checkbox" name="include_month" value="1" {% if numbering["include_month"] %}checked{% endif %}><label style="margin:0">Masukkan Bulan</label></div>
+<div class="check full"><input type="checkbox" name="active" value="1" {% if numbering["active"] %}checked{% endif %}><label style="margin:0">Format Aktif</label></div>
+</div>
+<div class="actions"><a class="btn gray" href="{{ url_for('numbering_settings') }}">Batal</a><button class="btn blue" type="submit">Simpan Format</button></div>
+</form>
+</section></main>
+</body>
+</html>

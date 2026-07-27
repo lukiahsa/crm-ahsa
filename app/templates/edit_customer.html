@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Customer CRM Ahsa</title>
+
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f4f6f9;
+            color: #1f2937;
+        }
+
+        header {
+            background: #17466f;
+            color: white;
+            padding: 24px 36px;
+        }
+
+        header h1 {
+            margin: 0 0 8px;
+        }
+
+        nav {
+            margin-top: 18px;
+        }
+
+        nav a {
+            color: white;
+            text-decoration: none;
+            margin-right: 22px;
+            font-weight: bold;
+        }
+
+        main {
+            max-width: 900px;
+            margin: 34px auto;
+            padding: 0 20px;
+        }
+
+        .panel {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 3px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        form {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+        }
+
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 7px;
+        }
+
+        input,
+        select,
+        textarea {
+            width: 100%;
+            padding: 11px;
+            box-sizing: border-box;
+            border: 1px solid #cbd5e1;
+            border-radius: 7px;
+        }
+
+        textarea {
+            min-height: 90px;
+            resize: vertical;
+        }
+
+        .full {
+            grid-column: 1 / -1;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        button,
+        .btn-back {
+            display: inline-block;
+            border: none;
+            border-radius: 7px;
+            padding: 12px 20px;
+            cursor: pointer;
+            font-weight: bold;
+            text-decoration: none;
+        }
+
+        button {
+            background: #17466f;
+            color: white;
+        }
+
+        .btn-back {
+            background: #e5e7eb;
+            color: #1f2937;
+        }
+
+        @media (max-width: 760px) {
+            form {
+                grid-template-columns: 1fr;
+            }
+
+            .full {
+                grid-column: auto;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>CRM AHSA EQUIPMENT</h1>
+        <p>Edit Customer</p>
+
+        <nav>
+            <a href="/">Dashboard</a>
+            <a href="/customers">Customer</a>
+        </nav>
+    </header>
+
+    <main>
+        <section class="panel">
+            <h2>Edit Customer</h2>
+
+            <form method="post">
+                <div>
+                    <label>Nama Customer</label>
+                    <input
+                        type="text"
+                        name="nama"
+                        value="{{ customer['nama'] }}"
+                        required
+                    >
+                </div>
+
+                <div>
+                    <label>Nomor WhatsApp</label>
+                    <input
+                        type="text"
+                        name="whatsapp"
+                        value="{{ customer['whatsapp'] or '' }}"
+                    >
+                </div>
+
+                <div>
+                    <label>Perusahaan / Instansi</label>
+                    <input
+                        type="text"
+                        name="instansi"
+                        value="{{ customer['instansi'] or '' }}"
+                    >
+                </div>
+
+                <div>
+                    <label>Kota / Kabupaten</label>
+                    <input
+                        type="text"
+                        name="kota"
+                        value="{{ customer['kota'] or '' }}"
+                    >
+                </div>
+
+                <div>
+                    <label>Produk</label>
+                    <select name="produk">
+                        {% for item in [
+                            'Tempat Sampah',
+                            'Tangga',
+                            'Material Handling',
+                            'Forklift',
+                            'Sparepart',
+                            'Jasa / Project',
+                            'Lainnya'
+                        ] %}
+                        <option
+                            value="{{ item }}"
+                            {% if customer['produk'] == item %}selected{% endif %}
+                        >
+                            {{ item }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label>Sumber Lead</label>
+                    <select name="sumber">
+                        {% for item in [
+                            'WhatsApp Organik',
+                            'Google Ads',
+                            'Website',
+                            'Referral',
+                            'Marketplace',
+                            'Pengadaan / Project',
+                            'Lainnya'
+                        ] %}
+                        <option
+                            value="{{ item }}"
+                            {% if customer['sumber'] == item %}selected{% endif %}
+                        >
+                            {{ item }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label>Status</label>
+                    <select name="status">
+                        {% for item in [
+                            'Prospek',
+                            'Follow Up',
+                            'Penawaran',
+                            'Closing',
+                            'Existing Customer',
+                            'Repeat Customer',
+                            'Tidak Aktif'
+                        ] %}
+                        <option
+                            value="{{ item }}"
+                            {% if customer['status'] == item %}selected{% endif %}
+                        >
+                            {{ item }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="full">
+                    <label>Catatan</label>
+                    <textarea name="catatan">{{ customer['catatan'] or '' }}</textarea>
+                </div>
+
+                <div class="full actions">
+                    <button type="submit">Simpan Perubahan</button>
+                    <a href="/customers" class="btn-back">Batal</a>
+                </div>
+            </form>
+        </section>
+    </main>
+</body>
+</html>

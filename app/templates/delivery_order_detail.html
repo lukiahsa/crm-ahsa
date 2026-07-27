@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>{{ delivery_order["nomor_surat_jalan"] }}</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#eef2f5;font-family:Arial,sans-serif;color:#15202b}.container{width:min(1120px,calc(100% - 28px));margin:26px auto}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:16px}h1{margin:0;color:#0b4388}.sub{color:#6b7882;margin-top:5px}.actions{display:flex;gap:8px;flex-wrap:wrap}
+.btn{display:inline-block;padding:10px 14px;border-radius:7px;text-decoration:none;font-weight:800;border:0;cursor:pointer;font-size:12px}.blue{background:#0b4388;color:#fff}.green{background:#159447;color:#fff}.gray{background:#6f7c86;color:#fff}.orange{background:#e48817;color:#fff}
+.card{background:#fff;border-radius:11px;padding:18px;box-shadow:0 3px 15px rgba(20,40,60,.1);margin-bottom:16px}.info{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.box{border:1px solid #d6e0e7;border-radius:8px;padding:11px}.box small{display:block;color:#6d7881;margin-bottom:5px}
+.badge{display:inline-block;padding:6px 10px;border-radius:999px;font-size:11px;font-weight:800}.draft{background:#e8eef5;color:#41576d}.packing{background:#fff0cc;color:#9a6500}.siap-kirim{background:#e8e2ff;color:#6038a2}.dalam-pengiriman{background:#dcecff;color:#0b5cab}.terkirim,.diterima{background:#dcf5e6;color:#087a37}.batal{background:#343a40;color:#fff}
+table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{border:1px solid #d7e0e7;padding:9px;font-size:11px;vertical-align:top}th{background:#0b4388;color:#fff}.spec{display:grid;grid-template-columns:68px 8px 1fr;line-height:1.45}.label{color:#6d7882}
+.bottom{display:grid;grid-template-columns:1fr 335px;gap:18px;margin-top:16px}.status{display:flex;gap:8px}.status select{flex:1;padding:10px;border:1px solid #cdd8e1;border-radius:7px}
+.timeline{position:relative;margin-top:8px}.activity{display:grid;grid-template-columns:18px 1fr;gap:10px;padding-bottom:15px;position:relative}.activity:not(:last-child):before{content:"";position:absolute;left:8px;top:18px;bottom:0;width:2px;background:#d9e3ea}.dot{width:18px;height:18px;border-radius:50%;background:#0b4388;border:4px solid #dcecff;z-index:1}.activity-card{border:1px solid #d6e0e7;border-radius:8px;padding:10px;background:#fbfcfd}.activity-head{display:flex;justify-content:space-between;gap:10px;margin-bottom:4px}.activity-head strong{color:#0b4388}.activity-time{font-size:10px;color:#75818a}.activity-desc{font-size:12px}.activity-by{font-size:10px;color:#75818a;margin-top:5px}
+@media(max-width:800px){.top{flex-direction:column}.info,.bottom{grid-template-columns:1fr}.card{overflow:auto}table{min-width:850px}}
+</style>
+</head>
+<body>
+<main class="container">
+<div class="top">
+<div>
+<div class="sub" style="font-weight:800;letter-spacing:1px">SURAT JALAN</div>
+<h1>{{ delivery_order["nomor_surat_jalan"] }}</h1>
+<div class="sub">Delivery Order Ahsa Equipment</div>
+</div>
+<div class="actions">
+<a class="btn gray" href="{{ url_for('delivery_orders') }}">Daftar</a>
+<a class="btn orange" href="{{ url_for('edit_delivery_order', delivery_order_id=delivery_order['id']) }}">Edit</a>
+<a class="btn blue" target="_blank" href="{{ url_for('print_delivery_order', delivery_order_id=delivery_order['id']) }}">📄 Preview PDF</a>
+<a class="btn green" href="{{ url_for('transaction_detail', transaction_id=delivery_order['transaction_id']) }}">Lihat Transaksi</a>
+</div>
+</div>
+
+<section class="card">
+<div class="info">
+<div class="box"><small>Customer</small><strong>{{ delivery_order["customer_nama"] or "-" }}</strong></div>
+<div class="box"><small>Instansi</small><strong>{{ delivery_order["customer_instansi"] or "-" }}</strong></div>
+<div class="box"><small>Status</small><span class="badge {{ delivery_order['status']|lower|replace(' ', '-') }}">{{ delivery_order["status"] }}</span></div>
+<div class="box"><small>Tanggal</small><strong>{{ delivery_order["tanggal_format"] }}</strong></div>
+<div class="box"><small>Transaksi</small><strong>{{ delivery_order["nomor_transaksi"] }}</strong></div>
+<div class="box"><small>Invoice</small><strong>{{ delivery_order["nomor_invoice"] or "-" }}</strong></div>
+<div class="box"><small>Metode</small><strong>{{ delivery_order["metode_pengiriman"] or "-" }}</strong></div>
+<div class="box"><small>Driver / Ekspedisi</small><strong>{{ delivery_order["driver"] or delivery_order["ekspedisi"] or "-" }}</strong></div>
+<div class="box"><small>No. Resi / Polisi</small><strong>{{ delivery_order["nomor_resi"] or delivery_order["nomor_polisi"] or "-" }}</strong></div>
+</div>
+</section>
+
+<section class="card">
+<table>
+<thead><tr><th style="width:45px">No.</th><th style="width:100px">Kode</th><th>Produk</th><th style="width:260px">Spesifikasi</th><th style="width:55px">Qty</th><th style="width:70px">Satuan</th><th style="width:180px">Keterangan</th></tr></thead>
+<tbody>
+{% for item in items %}
+<tr>
+<td>{{ loop.index }}</td><td>{{ item["kode_produk_snapshot"] or "-" }}</td><td><strong>{{ item["nama_produk_snapshot"] }}</strong></td>
+<td><div class="spec">
+<span class="label">Brand</span><span>:</span><strong>{{ item["brand_snapshot"] or "-" }}</strong>
+<span class="label">Warna/Steps</span><span>:</span><strong>{{ item["warna_snapshot"] or "-" }}</strong>
+<span class="label">Ukuran</span><span>:</span><strong>{{ item["ukuran_snapshot"] or "-" }}</strong>
+<span class="label">Varian</span><span>:</span><strong>{{ item["varian_snapshot"] or "-" }}</strong>
+</div></td>
+<td>{{ item["qty"] }}</td><td>{{ item["satuan_snapshot"] or "Unit" }}</td><td>{{ item["keterangan"] or "-" }}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+
+<div class="bottom">
+<div>
+<h3>Alamat Pengiriman</h3>
+<p style="white-space:pre-line">{{ delivery_order["alamat_pengiriman"] or delivery_order["customer_kota"] or "-" }}</p>
+<h3>Catatan</h3>
+<p style="white-space:pre-line">{{ delivery_order["catatan"] or "-" }}</p>
+</div>
+<div>
+<form class="status" method="POST" action="{{ url_for('update_delivery_order_status', delivery_order_id=delivery_order['id']) }}">
+<select name="status">{% for status in delivery_order_statuses %}<option value="{{ status }}" {% if status == delivery_order["status"] %}selected{% endif %}>{{ status }}</option>{% endfor %}</select>
+<button class="btn blue" type="submit">Ubah Status</button>
+</form>
+</div>
+</div>
+</section>
+
+<section class="card">
+<h3 style="margin-top:0;color:#0b4388">Timeline & Activity</h3>
+<div class="timeline">
+{% if activities %}
+{% for activity in activities %}
+<div class="activity">
+<div class="dot"></div>
+<div class="activity-card">
+<div class="activity-head"><strong>{{ activity["activity_type"]|replace("_"," ")|title }}</strong><span class="activity-time">{{ activity["created_at"] }}</span></div>
+<div class="activity-desc">{{ activity["description"] }}</div>
+<div class="activity-by">Oleh: {{ activity["created_by"] or "Sistem" }}</div>
+</div>
+</div>
+{% endfor %}
+{% else %}
+<p>Belum ada activity log.</p>
+{% endif %}
+</div>
+</section>
+</main>
+</body>
+</html>

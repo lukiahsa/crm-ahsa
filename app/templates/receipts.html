@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Daftar Kwitansi</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#eef2f5;font-family:Arial,sans-serif;color:#16212b}
+.container{width:min(1260px,calc(100% - 28px));margin:28px auto}.head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:18px}
+h1{margin:0;color:#0b4388}.sub{color:#6c7882;margin-top:5px}.buttons{display:flex;gap:8px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;justify-content:center;padding:9px 12px;border-radius:7px;text-decoration:none;font-weight:700;border:0;cursor:pointer;font-size:11px}
+.primary{background:#0b4388;color:#fff}.light{background:#fff;color:#17212b;border:1px solid #ced8e0}.green{background:#159447;color:#fff}.red{background:#c73535;color:#fff}
+.card{background:#fff;border-radius:11px;box-shadow:0 3px 15px rgba(20,40,60,.1);overflow:hidden;margin-bottom:18px}.card-head{padding:16px 18px;border-bottom:1px solid #e1e8ed}
+table{width:100%;border-collapse:collapse}th,td{padding:12px;border-bottom:1px solid #e1e8ed;font-size:12px;text-align:left}th{background:#0b4388;color:#fff;font-size:11px}
+.number{font-weight:800;color:#0b4388}.money{text-align:right;white-space:nowrap}.badge{display:inline-block;padding:6px 10px;border-radius:999px;font-size:11px;font-weight:800}
+.diterbitkan{background:#dcf5e6;color:#087a37}.void{background:#343a40;color:#fff}.quick{display:flex;gap:6px;flex-wrap:wrap}.inline{display:inline}.empty{text-align:center;padding:30px;color:#6c7882}
+.generate-grid{display:grid;grid-template-columns:1fr auto;gap:10px;padding:16px 18px}.generate-grid select{padding:11px;border:1px solid #ccd7df;border-radius:7px}
+@media(max-width:1000px){.card{overflow:auto}table{min-width:1100px}.head{align-items:flex-start;flex-direction:column}.generate-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main class="container">
+<div class="head">
+<div><h1>🧾 Kwitansi Pembayaran</h1><div class="sub">Kwitansi DP, termin, dan pelunasan yang terhubung ke invoice.</div></div>
+<div class="buttons"><a class="btn light" href="{{ url_for('dashboard') }}">Dashboard</a><a class="btn light" href="{{ url_for('transactions') }}">Transaksi</a></div>
+</div>
+
+<section class="card">
+<div class="card-head"><strong>Buat Kwitansi dari Invoice</strong><div class="sub">Pilih invoice yang akan menerima pembayaran.</div></div>
+{% if invoices %}
+<form class="generate-grid" id="receiptForm">
+<select id="invoiceSelect" required>
+<option value="">Pilih invoice</option>
+{% for invoice in invoices %}
+<option value="{{ invoice['id'] }}">{{ invoice["nomor_invoice"] }} — {{ invoice["customer_nama"] or "-" }}{% if invoice["customer_instansi"] %} | {{ invoice["customer_instansi"] }}{% endif %} | {{ invoice["status_pembayaran"] }}</option>
+{% endfor %}
+</select>
+<button class="btn green" type="submit">+ Buat Kwitansi</button>
+</form>
+{% else %}<div class="empty">Belum ada invoice.</div>{% endif %}
+</section>
+
+<section class="card">
+{% if receipts %}
+<table>
+<thead><tr><th>No. Kwitansi</th><th>Tanggal</th><th>Customer</th><th>Invoice</th><th>Jenis</th><th>Metode</th><th class="money">Nominal</th><th>Status</th><th>Aksi</th></tr></thead>
+<tbody>
+{% for receipt in receipts %}
+<tr>
+<td class="number">{{ receipt["nomor_kwitansi"] }}</td>
+<td>{{ format_tanggal_indonesia(receipt["tanggal"]) }}</td>
+<td><strong>{{ receipt["customer_nama"] or "-" }}</strong><br><small>{{ receipt["customer_instansi"] or "-" }}</small></td>
+<td>{{ receipt["nomor_invoice"] }}</td>
+<td>{{ receipt["jenis_pembayaran"] }}</td>
+<td>{{ receipt["metode_pembayaran"] }}</td>
+<td class="money">Rp {{ "{:,.0f}".format(receipt["nominal"] or 0).replace(",", ".") }}</td>
+<td><span class="badge {{ receipt['status']|lower }}">{{ receipt["status"] }}</span></td>
+<td><div class="quick">
+<a class="btn light" href="{{ url_for('receipt_detail', receipt_id=receipt['id']) }}">👁 Detail</a>
+<a class="btn primary" target="_blank" href="{{ url_for('print_receipt', receipt_id=receipt['id']) }}">📄 PDF</a>
+{% if receipt["status"] == "Void" %}
+<form class="inline" method="POST" action="{{ url_for('delete_receipt', receipt_id=receipt['id']) }}" onsubmit="return confirm('Hapus kwitansi ini?');"><button class="btn red" type="submit">🗑 Hapus</button></form>
+{% endif %}
+</div></td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+{% else %}<div class="empty">Belum ada kwitansi.</div>{% endif %}
+</section>
+</main>
+<script>
+const form=document.getElementById("receiptForm");
+if(form){form.addEventListener("submit",function(e){e.preventDefault();const id=document.getElementById("invoiceSelect").value;if(!id)return;window.location.href="/invoices/"+id+"/receipts/add";});}
+</script>
+</body>
+</html>

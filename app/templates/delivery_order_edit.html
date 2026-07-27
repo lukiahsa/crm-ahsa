@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Edit {{ delivery_order["nomor_surat_jalan"] }}</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#eef2f5;font-family:Arial,sans-serif;color:#17212b}.container{width:min(1160px,calc(100% - 28px));margin:26px auto}
+.head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:16px}h1{margin:0;color:#0b4388}.sub{color:#687580;margin-top:5px}
+.card{background:#fff;border-radius:10px;box-shadow:0 3px 16px rgba(20,40,60,.1);padding:20px;margin-bottom:16px}.title{font-size:17px;font-weight:900;color:#0b4388;margin-bottom:14px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.full{grid-column:1/-1}label{display:block;font-weight:700;margin-bottom:6px;font-size:12px}
+input,select,textarea{width:100%;padding:10px;border:1px solid #cad6df;border-radius:7px;font-size:13px}textarea{min-height:90px;resize:vertical}
+.info{padding:10px;border:1px solid #d7e0e7;border-radius:8px;background:#f8fafb}.info small{display:block;color:#6d7882;margin-bottom:4px}
+table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{border:1px solid #d8e1e7;padding:8px;vertical-align:top;font-size:11px}th{background:#0b4388;color:#fff}
+.btn{display:inline-block;padding:10px 15px;border:0;border-radius:7px;text-decoration:none;font-weight:800;cursor:pointer}.green{background:#159447;color:#fff}.gray{background:#6d7882;color:#fff}
+.actions{display:flex;justify-content:flex-end;gap:9px}
+@media(max-width:800px){.grid{grid-template-columns:1fr}.full{grid-column:auto}.card{overflow:auto}table{min-width:850px}.head{flex-direction:column}}
+</style>
+</head>
+<body>
+<main class="container">
+<div class="head">
+<div>
+<div class="sub" style="font-weight:800;letter-spacing:1px">SURAT JALAN</div>
+<h1>{{ delivery_order["nomor_surat_jalan"] }}</h1>
+<div class="sub">Lengkapi informasi pengiriman sebelum dicetak.</div>
+</div>
+<a class="btn gray" href="{{ url_for('delivery_orders') }}">Daftar Surat Jalan</a>
+</div>
+
+<form method="POST">
+<section class="card">
+<div class="title">Referensi Dokumen</div>
+<div class="grid">
+<div class="info"><small>Transaksi</small><strong>{{ delivery_order["nomor_transaksi"] }}</strong></div>
+<div class="info"><small>Invoice</small><strong>{{ delivery_order["nomor_invoice"] or "-" }}</strong></div>
+<div class="info"><small>Customer</small><strong>{{ delivery_order["customer_nama"] or "-" }}</strong></div>
+<div class="info"><small>Instansi</small><strong>{{ delivery_order["customer_instansi"] or "-" }}</strong></div>
+<div class="info"><small>Sales</small><strong>{{ delivery_order["sales"] or "-" }}</strong></div>
+<div class="info"><small>Kota</small><strong>{{ delivery_order["customer_kota"] or "-" }}</strong></div>
+</div>
+</section>
+
+<section class="card">
+<div class="title">Informasi Pengiriman</div>
+<div class="grid">
+<div><label>Tanggal Surat Jalan</label><input type="date" name="tanggal" value="{{ delivery_order['tanggal'] or '' }}" required></div>
+<div><label>Metode Pengiriman</label><select name="metode_pengiriman" required>{% for method in delivery_methods %}<option value="{{ method }}" {% if delivery_order["metode_pengiriman"] == method %}selected{% endif %}>{{ method }}</option>{% endfor %}</select></div>
+<div><label>Ekspedisi</label><input name="ekspedisi" value="{{ delivery_order['ekspedisi'] or '' }}" placeholder="JNE, Indah Cargo, dll."></div>
+<div><label>PIC Penerima</label><input name="pic_penerima" value="{{ delivery_order['pic_penerima'] or '' }}"></div>
+<div><label>Telepon Penerima</label><input name="telepon_penerima" value="{{ delivery_order['telepon_penerima'] or '' }}"></div>
+<div><label>Nomor Resi</label><input name="nomor_resi" value="{{ delivery_order['nomor_resi'] or '' }}"></div>
+<div><label>Driver</label><input name="driver" value="{{ delivery_order['driver'] or '' }}"></div>
+<div><label>Kendaraan</label><input name="kendaraan" value="{{ delivery_order['kendaraan'] or '' }}" placeholder="Mobil Box / Pickup"></div>
+<div><label>Nomor Polisi</label><input name="nomor_polisi" value="{{ delivery_order['nomor_polisi'] or '' }}"></div>
+<div><label>Jam Keluar</label><input type="time" name="jam_keluar" value="{{ delivery_order['jam_keluar'] or '' }}"></div>
+<div><label>Estimasi Tiba</label><input type="datetime-local" name="estimasi_tiba" value="{{ delivery_order['estimasi_tiba'] or '' }}"></div>
+<div><label>Tanggal Diterima</label><input type="date" name="tanggal_diterima" value="{{ delivery_order['tanggal_diterima'] or '' }}"></div>
+<div><label>Jam Diterima</label><input type="time" name="jam_diterima" value="{{ delivery_order['jam_diterima'] or '' }}"></div>
+<div class="full"><label>Alamat Pengiriman</label><textarea name="alamat_pengiriman">{{ delivery_order["alamat_pengiriman"] or "" }}</textarea></div>
+<div class="full"><label>Catatan</label><textarea name="catatan">{{ delivery_order["catatan"] or "" }}</textarea></div>
+</div>
+</section>
+
+<section class="card">
+<div class="title">Item Barang</div>
+<table>
+<thead><tr><th style="width:45px">No.</th><th style="width:100px">Kode</th><th>Nama Barang</th><th style="width:240px">Spesifikasi</th><th style="width:85px">Qty Kirim</th><th style="width:80px">Satuan</th><th style="width:210px">Keterangan</th></tr></thead>
+<tbody>
+{% for item in items %}
+<tr>
+<td>{{ loop.index }}<input type="hidden" name="item_id[]" value="{{ item['id'] }}"></td>
+<td>{{ item["kode_produk_snapshot"] or "-" }}</td>
+<td><strong>{{ item["nama_produk_snapshot"] }}</strong></td>
+<td>
+Brand: {{ item["brand_snapshot"] or "-" }}<br>
+Warna/Steps: {{ item["warna_snapshot"] or "-" }}<br>
+Ukuran: {{ item["ukuran_snapshot"] or "-" }}<br>
+Varian: {{ item["varian_snapshot"] or "-" }}
+</td>
+<td><input type="number" min="1" name="qty[]" value="{{ item['qty'] or 1 }}" required></td>
+<td>{{ item["satuan_snapshot"] or "Unit" }}</td>
+<td><input name="keterangan_item[]" value="{{ item['keterangan'] or '' }}" placeholder="Baik / lengkap"></td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</section>
+
+<div class="actions">
+<a class="btn gray" href="{{ url_for('delivery_orders') }}">Batal</a>
+<button class="btn green" type="submit">Simpan Surat Jalan</button>
+</div>
+</form>
+</main>
+</body>
+</html>

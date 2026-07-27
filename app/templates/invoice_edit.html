@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit {{ invoice["nomor_invoice"] }}</title>
+
+    <style>
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            background: #eef2f5;
+            color: #17212b;
+        }
+
+        .container {
+            width: min(900px, calc(100% - 28px));
+            margin: 28px auto;
+        }
+
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        h1 { margin: 0; font-size: 25px; }
+
+        .card {
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 3px 16px rgba(20, 40, 60, .10);
+            padding: 22px;
+        }
+
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 22px;
+        }
+
+        .summary-box {
+            border: 1px solid #dbe3ea;
+            border-radius: 8px;
+            padding: 13px;
+        }
+
+        .summary-box span {
+            display: block;
+            color: #687683;
+            font-size: 12px;
+            margin-bottom: 5px;
+        }
+
+        .summary-box strong {
+            font-size: 15px;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 17px;
+        }
+
+        .field.full { grid-column: 1 / -1; }
+
+        label {
+            display: block;
+            font-weight: 700;
+            margin-bottom: 7px;
+        }
+
+        input, textarea {
+            width: 100%;
+            border: 1px solid #cbd6df;
+            border-radius: 7px;
+            padding: 11px 12px;
+            font-size: 14px;
+        }
+
+        textarea {
+            min-height: 110px;
+            resize: vertical;
+        }
+
+        .help {
+            margin-top: 6px;
+            color: #6b7782;
+            font-size: 12px;
+            line-height: 1.45;
+        }
+
+        .actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 22px;
+        }
+
+        .btn {
+            display: inline-block;
+            border: 0;
+            border-radius: 7px;
+            padding: 11px 16px;
+            text-decoration: none;
+            cursor: pointer;
+            font-weight: 700;
+        }
+
+        .btn-secondary { background: #687581; color: #fff; }
+        .btn-primary { background: #159447; color: #fff; }
+
+        @media (max-width: 700px) {
+            .summary, .form-grid { grid-template-columns: 1fr; }
+            .field.full { grid-column: auto; }
+        }
+    </style>
+</head>
+
+<body>
+    <main class="container">
+        <div class="topbar">
+            <div>
+                <h1>Edit Invoice</h1>
+                <div>{{ invoice["nomor_invoice"] }}</div>
+            </div>
+
+            <a
+                class="btn btn-secondary"
+                href="{{ url_for('transaction_detail', transaction_id=transaction['id']) }}"
+            >
+                Kembali
+            </a>
+        </div>
+
+        <section class="card">
+            <div class="summary">
+                <div class="summary-box">
+                    <span>Customer</span>
+                    <strong>{{ transaction["customer_nama"] or "-" }}</strong>
+                </div>
+
+                <div class="summary-box">
+                    <span>Nomor Transaksi</span>
+                    <strong>{{ transaction["nomor_transaksi"] or "-" }}</strong>
+                </div>
+
+                <div class="summary-box">
+                    <span>Total Tagihan</span>
+                    <strong>
+                        Rp {{ "{:,.0f}".format(total_tagihan).replace(",", ".") }}
+                    </strong>
+                </div>
+            </div>
+
+            <form method="POST">
+                <div class="form-grid">
+                    <div class="field">
+                        <label for="tanggal_invoice">Tanggal Invoice</label>
+                        <input
+                            id="tanggal_invoice"
+                            name="tanggal_invoice"
+                            type="date"
+                            value="{{ invoice['tanggal_invoice'] or '' }}"
+                            required
+                        >
+                    </div>
+
+                    <div class="field">
+                        <label for="jatuh_tempo">Jatuh Tempo</label>
+                        <input
+                            id="jatuh_tempo"
+                            name="jatuh_tempo"
+                            type="date"
+                            value="{{ invoice['jatuh_tempo'] or '' }}"
+                        >
+                    </div>
+
+                    <div class="field">
+                        <label for="dp_persen">DP (%)</label>
+                        <input
+                            id="dp_persen"
+                            name="dp_persen"
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.01"
+                            value="{{ invoice['dp_persen'] or 0 }}"
+                        >
+                        <div class="help">
+                            Isi persentase, misalnya 50. Jika nominal DP kosong,
+                            sistem menghitung nominalnya otomatis.
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label for="jumlah_dibayar">DP / Jumlah Dibayar</label>
+                        <input
+                            id="jumlah_dibayar"
+                            name="jumlah_dibayar"
+                            type="text"
+                            inputmode="numeric"
+                            value="{{ invoice['jumlah_dibayar'] or 0 }}"
+                        >
+                        <div class="help">
+                            Masukkan angka tanpa “Rp”. Boleh memakai titik,
+                            misalnya 31.600.000.
+                        </div>
+                    </div>
+
+                    <div class="field full">
+                        <label for="catatan">Catatan Invoice</label>
+                        <textarea
+                            id="catatan"
+                            name="catatan"
+                        >{{ invoice["catatan"] or "" }}</textarea>
+                    </div>
+                </div>
+
+                <div class="actions">
+                    <a
+                        class="btn btn-secondary"
+                        href="{{ url_for('print_invoice', transaction_id=transaction['id']) }}"
+                    >
+                        Batal
+                    </a>
+
+                    <button class="btn btn-primary" type="submit">
+                        Simpan Invoice
+                    </button>
+                </div>
+            </form>
+        </section>
+    </main>
+</body>
+</html>

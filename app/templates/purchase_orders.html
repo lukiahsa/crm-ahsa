@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Purchase Order</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#eef2f5;font-family:Arial,sans-serif;color:#17212b}.container{width:min(1280px,calc(100% - 28px));margin:28px auto}.head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;margin-bottom:16px}h1{margin:0;color:#0b4388}.sub{margin-top:6px;color:#6d7882}.btn{display:inline-block;padding:10px 14px;border-radius:7px;text-decoration:none;font-weight:800;border:0;cursor:pointer}.blue{background:#0b4388;color:#fff}.gray{background:#fff;color:#17212b;border:1px solid #cbd6df}.stats{display:grid;grid-template-columns:repeat(6,1fr);gap:11px;margin-bottom:14px}.stat{background:#fff;border:1px solid #e3e9ee;border-radius:10px;padding:14px;box-shadow:0 3px 12px rgba(20,40,60,.07)}.stat small{display:block;color:#687681;font-weight:700;font-size:11px}.stat strong{display:block;color:#0b4388;font-size:20px;margin-top:6px}.filter{display:grid;grid-template-columns:2fr 1.3fr 1fr 1fr 1fr auto auto;gap:8px;background:#fff;padding:13px;border-radius:10px;margin-bottom:13px;box-shadow:0 3px 12px rgba(20,40,60,.07)}input,select{width:100%;padding:9px;border:1px solid #cbd6df;border-radius:7px;font:inherit}.card{background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 3px 14px rgba(20,40,60,.08)}table{width:100%;border-collapse:collapse}th,td{padding:10px;border-bottom:1px solid #e4eaee;text-align:left;font-size:11px}th{background:#0b4388;color:#fff}.code{font-family:Consolas,monospace;font-weight:800;color:#0b4388}.supplier{font-weight:800}.muted{color:#74818c}.badge{display:inline-block;padding:5px 8px;border-radius:999px;font-size:9px;font-weight:800;background:#eaf2ff;color:#0b4388}.batal{background:#fde6e3;color:#a52a22}.selesai{background:#dcf5e6;color:#087a37}.empty{text-align:center;padding:30px;color:#74818c}.actions{white-space:nowrap}.actions a{padding:7px 9px}
+@media(max-width:1000px){.stats{grid-template-columns:repeat(3,1fr)}.filter{grid-template-columns:1fr 1fr}.card{overflow-x:auto}table{min-width:980px}.head{flex-direction:column}}
+@media(max-width:560px){.stats,.filter{grid-template-columns:1fr}}
+</style>
+</head>
+<body><main class="container">
+<div class="head"><div><h1>📄 Purchase Order</h1><div class="sub">Kelola pesanan pembelian kepada supplier.</div></div><div><a class="btn gray" href="{{ url_for('dashboard') }}">Dashboard</a> <a class="btn blue" href="{{ url_for('add_purchase_order') }}">+ Buat PO</a></div></div>
+<section class="stats">
+<div class="stat"><small>Total PO</small><strong>{{ stats["total_po"] or 0 }}</strong></div>
+<div class="stat"><small>Draft</small><strong>{{ stats["total_draft"] or 0 }}</strong></div>
+<div class="stat"><small>Dalam Proses</small><strong>{{ stats["total_proses"] or 0 }}</strong></div>
+<div class="stat"><small>Selesai</small><strong>{{ stats["total_selesai"] or 0 }}</strong></div>
+<div class="stat"><small>Batal</small><strong>{{ stats["total_batal"] or 0 }}</strong></div>
+<div class="stat"><small>Nilai Pembelian</small><strong>{{ format_rupiah(stats["total_nilai"] or 0) }}</strong></div>
+</section>
+<form class="filter" method="GET">
+<input name="q" value="{{ keyword }}" placeholder="Cari nomor PO, supplier, catatan...">
+<select name="supplier_id"><option value="">Semua Supplier</option>{% for supplier in suppliers %}<option value="{{ supplier['id'] }}" {% if supplier_filter==supplier["id"] %}selected{% endif %}>{{ supplier["nama_supplier"] }}</option>{% endfor %}</select>
+<select name="status"><option value="">Semua Status</option>{% for status in statuses %}<option value="{{ status }}" {% if status_filter==status %}selected{% endif %}>{{ status }}</option>{% endfor %}</select>
+<input type="date" name="date_from" value="{{ date_from }}">
+<input type="date" name="date_to" value="{{ date_to }}">
+<button class="btn blue" type="submit">Filter</button><a class="btn gray" href="{{ url_for('purchase_orders') }}">Reset</a>
+</form>
+<section class="card"><table><thead><tr><th>Nomor PO</th><th>Supplier</th><th>Tanggal</th><th>Estimasi Datang</th><th>Status</th><th>Grand Total</th><th>Aksi</th></tr></thead><tbody>
+{% for po in purchase_orders %}
+<tr><td class="code">{{ po["nomor_po"] }}</td><td><div class="supplier">{{ po["supplier_nama_snapshot"] }}</div><div class="muted">{{ po["kode_supplier"] }}</div></td><td>{{ format_tanggal_indonesia(po["tanggal"]) }}</td><td>{{ format_tanggal_indonesia(po["estimasi_datang"]) if po["estimasi_datang"] else "-" }}</td><td><span class="badge {% if po['status']=='Batal' %}batal{% elif po['status']=='Selesai' %}selesai{% endif %}">{{ po["status"] }}</span></td><td><strong>{{ format_rupiah(po["grand_total"]) }}</strong></td><td class="actions"><a class="btn gray" href="{{ url_for('purchase_order_detail', purchase_order_id=po['id']) }}">Detail</a><a class="btn gray" href="{{ url_for('print_purchase_order', purchase_order_id=po['id']) }}" target="_blank">Print</a></td></tr>
+{% else %}<tr><td colspan="7" class="empty">Belum ada Purchase Order.</td></tr>{% endfor %}
+</tbody></table></section>
+</main></body></html>

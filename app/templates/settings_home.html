@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Pengaturan ERP</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#eef2f5;font-family:Arial,sans-serif;color:#17212b}
+.container{width:min(1100px,calc(100% - 28px));margin:30px auto}
+.head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:20px}
+h1{margin:0;color:#0b4388}.sub{margin-top:6px;color:#6d7882}
+.btn{display:inline-block;padding:10px 14px;border-radius:8px;text-decoration:none;font-weight:800}
+.gray{background:#fff;border:1px solid #cad5dd;color:#17212b}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.card{background:#fff;border-radius:12px;box-shadow:0 4px 18px rgba(20,40,60,.09);padding:20px;border:1px solid #e4eaef}
+.icon{font-size:30px}.card h2{margin:12px 0 7px;color:#0b4388;font-size:18px}.card p{min-height:46px;color:#6d7882;line-height:1.5;font-size:13px}
+.status{display:inline-block;padding:6px 10px;border-radius:999px;background:#eaf2ff;color:#0b4388;font-size:11px;font-weight:800;margin-bottom:14px}
+.open{display:block;text-align:center;background:#0b4388;color:#fff;padding:10px;border-radius:7px;text-decoration:none;font-weight:800}
+@media(max-width:800px){.grid{grid-template-columns:1fr}.head{flex-direction:column}}
+</style>
+</head>
+<body>
+<main class="container">
+<div class="head">
+<div>
+<h1>⚙️ Pengaturan ERP</h1>
+<div class="sub">Pusat konfigurasi Ahsa ERP Enterprise v1.0.</div>
+</div>
+<a class="btn gray" href="{{ url_for('dashboard') }}">Kembali ke Dashboard</a>
+</div>
+
+<section class="grid">
+<article class="card">
+<div class="icon">🏢</div>
+<h2>Profil Perusahaan</h2>
+<p>Kelola identitas perusahaan, kontak, rekening, NPWP, logo, dan footer dokumen.</p>
+<span class="status">{{ profile["nama_brand"] if profile else "Belum Diatur" }}</span>
+<a class="open" href="{{ url_for('company_profile_settings') }}">Buka Pengaturan</a>
+</article>
+
+<article class="card">
+<div class="icon">🔢</div>
+<h2>Penomoran Dokumen</h2>
+<p>Kelola format INV, QTN, SJ, PO, KWT, TRX, customer, dan supplier.</p>
+<span class="status">{{ numbering_count["total"] if numbering_count else 0 }} Format Aktif</span>
+<a class="open" href="{{ url_for('numbering_settings') }}">Buka Pengaturan</a>
+</article>
+
+<article class="card">
+<div class="icon">📦</div>
+<h2>Gudang Opsional</h2>
+<p>Aktifkan atau nonaktifkan fondasi inventory tanpa mengganggu modul penjualan.</p>
+<span class="status">
+{% if inventory_setting and inventory_setting["inventory_enabled"] %}Aktif{% else %}Nonaktif{% endif %}
+</span>
+<a class="open" href="{{ url_for('inventory_settings') }}">Buka Pengaturan</a>
+</article>
+</section>
+</main>
+</body>
+</html>

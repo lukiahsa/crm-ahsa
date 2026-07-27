@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Profil Perusahaan</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#eef2f5;font-family:Arial,sans-serif;color:#17212b}
+.container{width:min(1050px,calc(100% - 28px));margin:28px auto}.card{background:#fff;border-radius:12px;box-shadow:0 4px 18px rgba(20,40,60,.09);padding:22px;margin-bottom:16px}
+.head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:18px}h1{margin:0;color:#0b4388}.sub{color:#6d7882;margin-top:6px}
+.section-title{font-size:14px;color:#0b4388;margin:0 0 14px;padding-bottom:8px;border-bottom:1px solid #e2e9ee}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.full{grid-column:1/-1}
+label{display:block;font-weight:700;margin-bottom:6px;font-size:12px}input,textarea{width:100%;padding:10px;border:1px solid #cbd6df;border-radius:7px;font:inherit}textarea{min-height:85px;resize:vertical}
+.btn{display:inline-block;padding:10px 15px;border:0;border-radius:7px;text-decoration:none;font-weight:800;cursor:pointer}.blue{background:#0b4388;color:#fff}.gray{background:#6d7882;color:#fff}
+.actions{display:flex;justify-content:flex-end;gap:8px}.note{font-size:12px;line-height:1.5;color:#6d7882;background:#f6f9fb;border:1px solid #dde6ec;padding:12px;border-radius:8px}
+@media(max-width:720px){.grid{grid-template-columns:1fr}.full{grid-column:auto}.head{flex-direction:column}}
+</style>
+</head>
+<body>
+<main class="container">
+<div class="head">
+<div><h1>🏢 Profil Perusahaan</h1><div class="sub">Satu sumber data untuk seluruh dokumen ERP.</div></div>
+<a class="btn gray" href="{{ url_for('settings_home') }}">Pengaturan ERP</a>
+</div>
+<form method="POST">
+<section class="card">
+<h2 class="section-title">Identitas Perusahaan</h2>
+<div class="grid">
+<div><label>Nama Perusahaan</label><input name="nama_perusahaan" value="{{ profile['nama_perusahaan'] or '' }}" required></div>
+<div><label>Nama Brand</label><input name="nama_brand" value="{{ profile['nama_brand'] or '' }}" required></div>
+<div><label>NPWP</label><input name="npwp" value="{{ profile['npwp'] or '' }}"></div>
+<div><label>Path Logo</label><input name="logo_path" value="{{ profile['logo_path'] or '' }}" placeholder="static/images/logo-ahsa.png"></div>
+<div class="full"><label>Alamat</label><textarea name="alamat">{{ profile['alamat'] or '' }}</textarea></div>
+<div><label>Kota</label><input name="kota" value="{{ profile['kota'] or '' }}"></div>
+<div><label>Provinsi</label><input name="provinsi" value="{{ profile['provinsi'] or '' }}"></div>
+<div><label>Kode Pos</label><input name="kode_pos" value="{{ profile['kode_pos'] or '' }}"></div>
+</div>
+</section>
+
+<section class="card">
+<h2 class="section-title">Kontak</h2>
+<div class="grid">
+<div><label>Telepon</label><input name="telepon" value="{{ profile['telepon'] or '' }}"></div>
+<div><label>WhatsApp</label><input name="whatsapp" value="{{ profile['whatsapp'] or '' }}"></div>
+<div><label>Email</label><input type="email" name="email" value="{{ profile['email'] or '' }}"></div>
+<div><label>Website</label><input name="website" value="{{ profile['website'] or '' }}"></div>
+</div>
+</section>
+
+<section class="card">
+<h2 class="section-title">Rekening Perusahaan</h2>
+<div class="grid">
+<div><label>Bank</label><input name="bank" value="{{ profile['bank'] or '' }}"></div>
+<div><label>No. Rekening</label><input name="no_rekening" value="{{ profile['no_rekening'] or '' }}"></div>
+<div class="full"><label>Atas Nama</label><input name="atas_nama" value="{{ profile['atas_nama'] or '' }}"></div>
+</div>
+</section>
+
+<section class="card">
+<h2 class="section-title">Footer Dokumen</h2>
+<div class="grid">
+<div><label>Footer Invoice</label><textarea name="footer_invoice">{{ profile['footer_invoice'] or '' }}</textarea></div>
+<div><label>Footer Quotation</label><textarea name="footer_quotation">{{ profile['footer_quotation'] or '' }}</textarea></div>
+<div><label>Footer Purchase Order</label><textarea name="footer_purchase_order">{{ profile['footer_purchase_order'] or '' }}</textarea></div>
+<div><label>Footer Surat Jalan</label><textarea name="footer_delivery_order">{{ profile['footer_delivery_order'] or '' }}</textarea></div>
+<div class="full"><label>Footer Kwitansi</label><textarea name="footer_receipt">{{ profile['footer_receipt'] or '' }}</textarea></div>
+</div>
+<p class="note">Foundation ini menyimpan data terpusat. Integrasi otomatis ke seluruh template lama akan dilakukan bertahap agar dokumen yang sudah stabil tidak rusak.</p>
+</section>
+
+<div class="actions">
+<a class="btn gray" href="{{ url_for('settings_home') }}">Batal</a>
+<button class="btn blue" type="submit">Simpan Profil</button>
+</div>
+</form>
+</main>
+</body>
+</html>

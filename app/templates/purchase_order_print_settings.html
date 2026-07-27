@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Pengaturan Print Purchase Order</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#eef2f5;font-family:Arial,sans-serif;color:#17212b}
+.container{width:min(880px,calc(100% - 28px));margin:30px auto}
+.head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:18px}
+h1{margin:0;color:#0b4388}.sub{margin-top:6px;color:#6d7882}
+.card{background:#fff;border:1px solid #e0e7ec;border-radius:12px;box-shadow:0 4px 18px rgba(20,40,60,.09);overflow:hidden}
+.card-head{padding:18px 20px;background:#0b4388;color:#fff}
+.card-head h2{margin:0;font-size:16px}.card-head p{margin:6px 0 0;font-size:12px;opacity:.9}
+.option{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:20px;border-bottom:1px solid #e3e9ee}
+.option:last-child{border-bottom:0}
+.option h3{margin:0 0 5px;color:#0b4388;font-size:14px}
+.option p{margin:0;color:#6d7882;font-size:12px;line-height:1.5}
+.switch{position:relative;display:inline-block;width:54px;height:30px;flex:0 0 auto}
+.switch input{opacity:0;width:0;height:0}
+.slider{position:absolute;cursor:pointer;inset:0;background:#c7d0d7;border-radius:99px;transition:.2s}
+.slider:before{content:"";position:absolute;width:22px;height:22px;left:4px;top:4px;background:#fff;border-radius:50%;box-shadow:0 2px 5px rgba(0,0,0,.2);transition:.2s}
+.switch input:checked+.slider{background:#169b43}
+.switch input:checked+.slider:before{transform:translateX(24px)}
+.note{margin:16px 0;background:#e8f7ed;border:1px solid #9cd6ae;border-radius:8px;padding:13px;color:#176b35;font-size:12px}
+.actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+.btn{display:inline-block;padding:10px 15px;border:0;border-radius:7px;text-decoration:none;font-weight:800;cursor:pointer}
+.blue{background:#0b4388;color:#fff}.gray{background:#6d7882;color:#fff}
+</style>
+</head>
+<body>
+<main class="container">
+<div class="head">
+<div>
+<h1>🖨️ Pengaturan Print Purchase Order</h1>
+<div class="sub">Bagian yang dimatikan tidak akan tampil pada dokumen print atau PDF.</div>
+</div>
+<a class="btn gray" href="{{ url_for('settings_home') }}">Pengaturan ERP</a>
+</div>
+
+<form method="POST">
+<section class="card">
+<div class="card-head">
+<h2>Tampilan Opsional Purchase Order</h2>
+<p>Pengaturan ini berlaku untuk seluruh Purchase Order yang dicetak.</p>
+</div>
+
+<div class="option">
+<div>
+<h3>Detail Biaya</h3>
+<p>Menampilkan baris Diskon, PPN, Ongkir, dan Biaya Lain. Subtotal dan Grand Total tetap tampil.</p>
+</div>
+<label class="switch">
+<input type="checkbox" name="po_show_cost_details" value="1"
+{% if settings and settings["po_show_cost_details"] %}checked{% endif %}>
+<span class="slider"></span>
+</label>
+</div>
+
+<div class="option">
+<div>
+<h3>Informasi Perusahaan di Footer</h3>
+<p>Menampilkan blok Rekening Perusahaan, Kontak Kami, dan Informasi Perusahaan. QR verifikasi tetap tampil.</p>
+</div>
+<label class="switch">
+<input type="checkbox" name="po_show_company_footer" value="1"
+{% if settings and settings["po_show_company_footer"] %}checked{% endif %}>
+<span class="slider"></span>
+</label>
+</div>
+</section>
+
+<div class="note">
+Logo Purchase Order menggunakan file yang sama dengan Invoice, Penawaran, dan Kwitansi:
+<strong>static/images/logo-ahsa.png</strong>.
+</div>
+
+<div class="actions">
+<a class="btn gray" href="{{ url_for('settings_home') }}">Batal</a>
+<button class="btn blue" type="submit">Simpan Pengaturan</button>
+</div>
+</form>
+</main>
+</body>
+</html>

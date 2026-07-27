@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Tambah Transaksi</title>
+
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f4f6f8;
+            color: #222;
+        }
+
+        .container {
+            width: 94%;
+            max-width: 1250px;
+            margin: 30px auto;
+        }
+
+        .header {
+            margin-bottom: 20px;
+        }
+
+        .header h1 {
+            margin: 0 0 8px;
+        }
+
+        .header p {
+            margin: 0;
+            color: #666;
+        }
+
+        .card {
+            background: white;
+            padding: 24px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+            margin-bottom: 20px;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 18px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .full {
+            grid-column: 1 / -1;
+        }
+
+        label {
+            margin-bottom: 7px;
+            font-weight: bold;
+        }
+
+        input,
+        select,
+        textarea {
+            padding: 11px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #198754;
+        }
+
+        textarea {
+            min-height: 85px;
+            resize: vertical;
+        }
+
+        h2 {
+            margin-top: 0;
+        }
+
+        .table-wrap {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 1100px;
+        }
+
+        th,
+        td {
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+            text-align: left;
+        }
+
+        th {
+            background: #f1f3f5;
+        }
+
+        .product-select {
+            min-width: 300px;
+        }
+
+        .number-input {
+            width: 140px;
+        }
+
+        .qty-input {
+            width: 80px;
+        }
+
+        .readonly {
+            background: #f1f3f5;
+        }
+
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 18px;
+            margin-top: 24px;
+        }
+
+        .summary-result {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 18px;
+        }
+
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+            padding: 7px 0;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .summary-row:last-child {
+            border-bottom: none;
+        }
+
+        .summary-row.total {
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .actions {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            margin-top: 24px;
+        }
+
+        .actions-right {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 11px 18px;
+            border-radius: 7px;
+            border: none;
+            text-decoration: none;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .btn-primary {
+            background: #198754;
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+            padding: 8px 12px;
+        }
+
+        .marketplace-only {
+            display: none;
+        }
+
+        @media (max-width: 750px) {
+            .form-grid,
+            .summary {
+                grid-template-columns: 1fr;
+            }
+
+            .full {
+                grid-column: auto;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+
+        <div class="header">
+            <h1>Tambah Transaksi</h1>
+            <p>Satu transaksi dapat berisi beberapa produk sekaligus.</p>
+        </div>
+
+        <form method="POST" id="transaction-form">
+
+            <div class="card">
+                <h2>Informasi Transaksi</h2>
+
+                <div class="form-grid">
+
+                    <div class="form-group">
+                        <label for="tanggal">Tanggal *</label>
+                        <input
+                            type="date"
+                            id="tanggal"
+                            name="tanggal"
+                            required
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="customer_id">Customer *</label>
+
+                        <select
+                            id="customer_id"
+                            name="customer_id"
+                            required
+                        >
+                            <option value="">Pilih customer</option>
+
+                            {% for customer in customers %}
+                                <option value="{{ customer['id'] }}">
+                                    {{ customer['nama'] }}
+
+                                    {% if customer['instansi'] %}
+                                        - {{ customer['instansi'] }}
+                                    {% endif %}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="jenis_penjualan">
+                            Jenis Penjualan *
+                        </label>
+
+                        <select
+                            id="jenis_penjualan"
+                            name="jenis_penjualan"
+                            required
+                        >
+                            <option value="">Pilih jenis penjualan</option>
+                            <option value="Direct">Direct</option>
+                            <option value="Marketplace">Marketplace</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="referal">Referal</label>
+
+                        <input
+                            type="text"
+                            id="referal"
+                            name="referal"
+                            placeholder="Google Ads, TikTok, Offline, dll."
+                        >
+                    </div>
+
+                    <div class="form-group full">
+                        <label for="catatan">Catatan</label>
+
+                        <textarea
+                            id="catatan"
+                            name="catatan"
+                            placeholder="Catatan tambahan transaksi"
+                        ></textarea>
+                    </div>
+
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Item Produk</h2>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Produk</th>
+                                <th>Qty</th>
+                                <th>Harga Jual</th>
+                                <th>Harga Modal</th>
+                                <th>Subtotal</th>
+                                <th>Margin Item</th>
+                                <th>Aksi</th>
+                            </tr>
+                        </thead>
+
+                        <tbody id="items-body">
+                            <tr class="item-row">
+                                <td>
+                                    <select
+                                        name="product_id[]"
+                                        class="product-select"
+                                        required
+                                    >
+                                        <option value="">Pilih produk</option>
+
+                                        {% for product in products %}
+                                            <option
+                                                value="{{ product['id'] }}"
+                                                data-harga-jual="{{ product['harga_jual_default'] }}"
+                                                data-harga-modal="{{ product['harga_modal_default'] }}"
+                                            >
+                                                {{ product['kode_produk'] or '-' }}
+                                                -
+                                                {{ product['nama_produk'] }}
+
+                                                {% if product['warna_nama'] %}
+                                                    - {{ product['warna_nama'] }}
+                                                {% endif %}
+
+                                                {% if product['ukuran_nama'] %}
+                                                    - {{ product['ukuran_nama'] }}
+                                                {% endif %}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                </td>
+
+                                <td>
+                                    <input
+                                        type="number"
+                                        name="qty[]"
+                                        class="qty-input"
+                                        value="1"
+                                        min="1"
+                                        required
+                                    >
+                                </td>
+
+                                <td>
+                                    <input
+                                        type="text"
+                                        class="harga-jual-display number-input"
+                                        value="0"
+                                        inputmode="numeric"
+                                        autocomplete="off"
+                                        required
+                                    >
+
+                                    <input
+                                        type="hidden"
+                                        name="harga_jual[]"
+                                        class="harga-jual"
+                                        value="0"
+                                    >
+                                </td>
+
+                                <td>
+                                    <input
+                                        type="text"
+                                        class="harga-modal-display number-input"
+                                        value="0"
+                                        inputmode="numeric"
+                                        autocomplete="off"
+                                        required
+                                    >
+
+                                    <input
+                                        type="hidden"
+                                        name="harga_modal[]"
+                                        class="harga-modal"
+                                        value="0"
+                                    >
+                                </td>
+
+                                <td>
+                                    <input
+                                        type="text"
+                                        class="subtotal number-input readonly"
+                                        value="0"
+                                        readonly
+                                    >
+                                </td>
+
+                                <td>
+                                    <input
+                                        type="text"
+                                        class="margin-item number-input readonly"
+                                        value="0"
+                                        readonly
+                                    >
+                                </td>
+
+                                <td>
+                                    <button
+                                        type="button"
+                                        class="btn btn-danger remove-row"
+                                    >
+                                        Hapus
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <button
+                    type="button"
+                    id="add-row"
+                    class="btn btn-secondary"
+                    style="margin-top: 16px;"
+                >
+                    + Tambah Produk
+                </button>
+
+                <div class="summary">
+
+                    <div>
+                        <div class="form-group marketplace-only">
+                            <label for="admin_fee_display">
+                                Admin Marketplace
+                            </label>
+
+                            <input
+                                type="text"
+                                id="admin_fee_display"
+                                value="0"
+                                inputmode="numeric"
+                                autocomplete="off"
+                            >
+
+                            <input
+                                type="hidden"
+                                id="admin_fee"
+                                name="admin_fee"
+                                value="0"
+                            >
+                        </div>
+
+                        <div class="form-group marketplace-only">
+                            <label for="potongan_display">
+                                Potongan Marketplace
+                            </label>
+
+                            <input
+                                type="text"
+                                id="potongan_display"
+                                value="0"
+                                inputmode="numeric"
+                                autocomplete="off"
+                            >
+
+                            <input
+                                type="hidden"
+                                id="potongan"
+                                name="potongan"
+                                value="0"
+                            >
+                        </div>
+
+                        <div class="form-group">
+                            <label for="biaya_lain_display">
+                                Biaya Lain
+                            </label>
+
+                            <input
+                                type="text"
+                                id="biaya_lain_display"
+                                value="0"
+                                inputmode="numeric"
+                                autocomplete="off"
+                            >
+
+                            <input
+                                type="hidden"
+                                id="biaya_lain"
+                                name="biaya_lain"
+                                value="0"
+                            >
+                        </div>
+
+                        <div class="form-group">
+                            <label for="keterangan_biaya">
+                                Keterangan Biaya
+                            </label>
+
+                            <input
+                                type="text"
+                                id="keterangan_biaya"
+                                name="keterangan_biaya"
+                                placeholder="Lalamove, ongkir, packing, dll."
+                            >
+                        </div>
+                    </div>
+
+                    <div class="summary-result">
+                        <div class="summary-row">
+                            <span>Total Penjualan</span>
+                            <strong id="total-penjualan">Rp 0</strong>
+                        </div>
+
+                        <div class="summary-row">
+                            <span>Jumlah Diterima</span>
+                            <strong id="jumlah-diterima">Rp 0</strong>
+                        </div>
+
+                        <div class="summary-row">
+                            <span>Total Modal</span>
+                            <strong id="total-modal">Rp 0</strong>
+                        </div>
+
+                        <div class="summary-row">
+                            <span>Margin</span>
+                            <strong id="margin">Rp 0</strong>
+                        </div>
+
+                        <div class="summary-row total">
+                            <span>Laba Bersih</span>
+                            <strong id="laba-bersih">Rp 0</strong>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="actions">
+                    <a
+                        href="{{ url_for('transactions') }}"
+                        class="btn btn-secondary"
+                    >
+                        Batal
+                    </a>
+
+                    <div class="actions-right">
+                        <button
+                            type="submit"
+                            class="btn btn-primary"
+                        >
+                            Simpan Transaksi
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+
+        </form>
+    </div>
+
+    <script>
+        const itemsBody = document.getElementById("items-body");
+        const addRowButton = document.getElementById("add-row");
+        const jenisPenjualan = document.getElementById("jenis_penjualan");
+        const marketplaceFields =
+            document.querySelectorAll(".marketplace-only");
+
+        const adminFeeInput = document.getElementById("admin_fee");
+        const adminFeeDisplay =
+            document.getElementById("admin_fee_display");
+
+        const potonganInput = document.getElementById("potongan");
+        const potonganDisplay =
+            document.getElementById("potongan_display");
+
+        const biayaLainInput = document.getElementById("biaya_lain");
+        const biayaLainDisplay =
+            document.getElementById("biaya_lain_display");
+
+        function onlyDigits(value) {
+            return String(value || "").replace(/\D/g, "");
+        }
+
+        function parseMoney(value) {
+            const digits = onlyDigits(value);
+
+            return digits ? Number(digits) : 0;
+        }
+
+        function formatNumber(value) {
+            return Number(value || 0).toLocaleString("id-ID");
+        }
+
+        function formatRupiah(value) {
+            return "Rp " + formatNumber(value);
+        }
+
+        function syncMoneyInput(displayInput, hiddenInput) {
+            const numericValue = parseMoney(displayInput.value);
+
+            hiddenInput.value = numericValue;
+            displayInput.value = formatNumber(numericValue);
+        }
+
+        function updateMarketplaceFields() {
+            const isMarketplace =
+                jenisPenjualan.value === "Marketplace";
+
+            marketplaceFields.forEach((element) => {
+                element.style.display =
+                    isMarketplace ? "flex" : "none";
+            });
+
+            if (!isMarketplace) {
+                adminFeeInput.value = 0;
+                adminFeeDisplay.value = "0";
+
+                potonganInput.value = 0;
+                potonganDisplay.value = "0";
+            }
+
+            calculateTotals();
+        }
+
+        function updateRow(row) {
+            const qtyInput = row.querySelector(".qty-input");
+
+            const hargaJualDisplay =
+                row.querySelector(".harga-jual-display");
+
+            const hargaJualInput =
+                row.querySelector(".harga-jual");
+
+            const hargaModalDisplay =
+                row.querySelector(".harga-modal-display");
+
+            const hargaModalInput =
+                row.querySelector(".harga-modal");
+
+            const subtotalInput =
+                row.querySelector(".subtotal");
+
+            const marginItemInput =
+                row.querySelector(".margin-item");
+
+            syncMoneyInput(
+                hargaJualDisplay,
+                hargaJualInput
+            );
+
+            syncMoneyInput(
+                hargaModalDisplay,
+                hargaModalInput
+            );
+
+            const qty = Number(qtyInput.value || 0);
+            const hargaJual = Number(hargaJualInput.value || 0);
+            const hargaModal = Number(hargaModalInput.value || 0);
+
+            const subtotal = qty * hargaJual;
+            const subtotalModal = qty * hargaModal;
+            const marginItem = subtotal - subtotalModal;
+
+            subtotalInput.value = formatNumber(subtotal);
+            marginItemInput.value = formatNumber(marginItem);
+        }
+
+        function calculateTotals() {
+            let totalPenjualan = 0;
+            let totalModal = 0;
+
+            document
+                .querySelectorAll(".item-row")
+                .forEach((row) => {
+                    updateRow(row);
+
+                    const qty = Number(
+                        row.querySelector(".qty-input").value || 0
+                    );
+
+                    const hargaJual = Number(
+                        row.querySelector(".harga-jual").value || 0
+                    );
+
+                    const hargaModal = Number(
+                        row.querySelector(".harga-modal").value || 0
+                    );
+
+                    totalPenjualan += qty * hargaJual;
+                    totalModal += qty * hargaModal;
+                });
+
+            syncMoneyInput(
+                adminFeeDisplay,
+                adminFeeInput
+            );
+
+            syncMoneyInput(
+                potonganDisplay,
+                potonganInput
+            );
+
+            syncMoneyInput(
+                biayaLainDisplay,
+                biayaLainInput
+            );
+
+            const adminFee = Number(adminFeeInput.value || 0);
+            const potongan = Number(potonganInput.value || 0);
+            const biayaLain = Number(biayaLainInput.value || 0);
+
+            const jumlahDiterima =
+                totalPenjualan - adminFee - potongan;
+
+            const margin =
+                jumlahDiterima - totalModal;
+
+            const labaBersih =
+                margin - biayaLain;
+
+            document.getElementById(
+                "total-penjualan"
+            ).textContent = formatRupiah(totalPenjualan);
+
+            document.getElementById(
+                "jumlah-diterima"
+            ).textContent = formatRupiah(jumlahDiterima);
+
+            document.getElementById(
+                "total-modal"
+            ).textContent = formatRupiah(totalModal);
+
+            document.getElementById(
+                "margin"
+            ).textContent = formatRupiah(margin);
+
+            document.getElementById(
+                "laba-bersih"
+            ).textContent = formatRupiah(labaBersih);
+        }
+
+        function bindMoneyDisplay(
+            displayInput,
+            hiddenInput
+        ) {
+            displayInput.addEventListener("input", () => {
+                hiddenInput.value =
+                    parseMoney(displayInput.value);
+
+                displayInput.value =
+                    formatNumber(hiddenInput.value);
+
+                calculateTotals();
+            });
+
+            displayInput.addEventListener("focus", () => {
+                displayInput.select();
+            });
+
+            displayInput.addEventListener("blur", () => {
+                syncMoneyInput(
+                    displayInput,
+                    hiddenInput
+                );
+            });
+        }
+
+        function bindRowEvents(row) {
+            const productSelect =
+                row.querySelector(".product-select");
+
+            const qtyInput =
+                row.querySelector(".qty-input");
+
+            const hargaJualDisplay =
+                row.querySelector(".harga-jual-display");
+
+            const hargaJualInput =
+                row.querySelector(".harga-jual");
+
+            const hargaModalDisplay =
+                row.querySelector(".harga-modal-display");
+
+            const hargaModalInput =
+                row.querySelector(".harga-modal");
+
+            const removeButton =
+                row.querySelector(".remove-row");
+
+            productSelect.addEventListener("change", () => {
+                const option =
+                    productSelect.options[
+                        productSelect.selectedIndex
+                    ];
+
+                const hargaJual =
+                    Number(option.dataset.hargaJual || 0);
+
+                const hargaModal =
+                    Number(option.dataset.hargaModal || 0);
+
+                hargaJualInput.value = hargaJual;
+                hargaJualDisplay.value =
+                    formatNumber(hargaJual);
+
+                hargaModalInput.value = hargaModal;
+                hargaModalDisplay.value =
+                    formatNumber(hargaModal);
+
+                calculateTotals();
+            });
+
+            qtyInput.addEventListener(
+                "input",
+                calculateTotals
+            );
+
+            bindMoneyDisplay(
+                hargaJualDisplay,
+                hargaJualInput
+            );
+
+            bindMoneyDisplay(
+                hargaModalDisplay,
+                hargaModalInput
+            );
+
+            removeButton.addEventListener("click", () => {
+                const rows =
+                    document.querySelectorAll(".item-row");
+
+                if (rows.length === 1) {
+                    alert(
+                        "Minimal harus ada satu produk."
+                    );
+
+                    return;
+                }
+
+                row.remove();
+                calculateTotals();
+            });
+        }
+
+        addRowButton.addEventListener("click", () => {
+            const firstRow =
+                document.querySelector(".item-row");
+
+            const newRow =
+                firstRow.cloneNode(true);
+
+            newRow.querySelector(
+                ".product-select"
+            ).value = "";
+
+            newRow.querySelector(
+                ".qty-input"
+            ).value = 1;
+
+            newRow.querySelector(
+                ".harga-jual"
+            ).value = 0;
+
+            newRow.querySelector(
+                ".harga-jual-display"
+            ).value = "0";
+
+            newRow.querySelector(
+                ".harga-modal"
+            ).value = 0;
+
+            newRow.querySelector(
+                ".harga-modal-display"
+            ).value = "0";
+
+            newRow.querySelector(
+                ".subtotal"
+            ).value = "0";
+
+            newRow.querySelector(
+                ".margin-item"
+            ).value = "0";
+
+            itemsBody.appendChild(newRow);
+
+            bindRowEvents(newRow);
+            calculateTotals();
+        });
+
+        jenisPenjualan.addEventListener(
+            "change",
+            updateMarketplaceFields
+        );
+
+        bindMoneyDisplay(
+            adminFeeDisplay,
+            adminFeeInput
+        );
+
+        bindMoneyDisplay(
+            potonganDisplay,
+            potonganInput
+        );
+
+        bindMoneyDisplay(
+            biayaLainDisplay,
+            biayaLainInput
+        );
+
+        document
+            .querySelectorAll(".item-row")
+            .forEach(bindRowEvents);
+
+        syncMoneyInput(
+            adminFeeDisplay,
+            adminFeeInput
+        );
+
+        syncMoneyInput(
+            potonganDisplay,
+            potonganInput
+        );
+
+        syncMoneyInput(
+            biayaLainDisplay,
+            biayaLainInput
+        );
+
+        updateMarketplaceFields();
+        calculateTotals();
+    </script>
+</body>
+</html>
