@@ -706,6 +706,10 @@ def get_effective_identity(
 
 def get_effective_quotation_print_settings(quotation, identity):
     """Gabungkan preferensi quotation dengan capability identity."""
+    is_full_identity = (
+        identity["identity_type"] == IDENTITY_TYPE_FULL
+    )
+
     return {
         "show_discount": bool(quotation["show_discount"]),
         "show_terbilang": bool(quotation["show_terbilang"]),
@@ -720,8 +724,14 @@ def get_effective_quotation_print_settings(quotation, identity):
             bool(quotation["show_signature"])
             and bool(identity["allow_signature"])
         ),
-        "show_footer": bool(quotation["show_footer"]),
-        "show_website_footer": bool(identity["allow_website_footer"]),
+        "show_footer": (
+            bool(quotation["show_footer"])
+            and is_full_identity
+        ),
+        "show_website_footer": (
+            bool(identity["allow_website_footer"])
+            and is_full_identity
+        ),
     }
 
 
@@ -3922,7 +3932,11 @@ def update_quotation_print_settings(quotation_id):
                 if identity["allow_signature"]
                 else 0
             ),
-            checkbox_value(request.form, "show_footer"),
+            (
+                checkbox_value(request.form, "show_footer")
+                if identity["identity_type"] == IDENTITY_TYPE_FULL
+                else 0
+            ),
             checkbox_value(request.form, "auto_hide_zero"),
             quotation_id,
         ),

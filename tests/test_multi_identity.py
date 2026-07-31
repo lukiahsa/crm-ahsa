@@ -337,6 +337,71 @@ class MultiIdentityRegressionTest(unittest.TestCase):
         self.assertNotIn("data:image/png;base64", denko_html)
         self.assertNotIn("Luki Lukmanul Hakim", denko_html)
 
+    def test_denko_footer_is_suppressed_server_side(self):
+        denko_id = self.create_quotation(
+            main.IDENTITY_TYPE_QUOTATION_ONLY
+        )
+        denko_settings = self.client.post(
+            f"/quotations/{denko_id}/print-settings",
+            data={
+                "show_footer": "1",
+                "show_qr": "1",
+                "show_signature": "1",
+            },
+        )
+        self.assertEqual(denko_settings.status_code, 302)
+
+        conn = database.get_connection()
+        persisted = conn.execute(
+            """
+            SELECT show_footer, show_qr, show_signature
+            FROM sales_quotations
+            WHERE id = ?
+            """,
+            (denko_id,),
+        ).fetchone()
+        self.assertEqual(persisted["show_footer"], 0)
+        self.assertEqual(persisted["show_qr"], 0)
+        self.assertEqual(persisted["show_signature"], 0)
+
+        conn.execute(
+            """
+            UPDATE sales_quotations
+            SET show_footer = 1,
+                show_qr = 1,
+                show_signature = 1
+            WHERE id = ?
+            """,
+            (denko_id,),
+        )
+        conn.commit()
+        conn.close()
+
+        denko_html = self.client.get(
+            f"/quotations/{denko_id}/print"
+        ).get_data(as_text=True)
+
+        ahsa_id = self.create_quotation(main.IDENTITY_TYPE_FULL)
+        ahsa_settings = self.client.post(
+            f"/quotations/{ahsa_id}/print-settings",
+            data={
+                "show_footer": "1",
+                "show_qr": "1",
+                "show_signature": "1",
+            },
+        )
+        self.assertEqual(ahsa_settings.status_code, 302)
+        ahsa_html = self.client.get(
+            f"/quotations/{ahsa_id}/print"
+        ).get_data(as_text=True)
+
+        self.assertNotIn("<footer", denko_html)
+        self.assertNotIn("distributordalton.com", denko_html)
+        self.assertNotIn("data:image/png;base64", denko_html)
+        self.assertNotIn("Luki Lukmanul Hakim", denko_html)
+        self.assertIn('<footer class="footer', ahsa_html)
+        self.assertIn("distributordalton.com", ahsa_html)
+
     def test_duplicate_preserves_identity_and_converted_identity_is_locked(self):
         denko_id = self.create_quotation(main.IDENTITY_TYPE_QUOTATION_ONLY)
         duplicate = self.client.post(f"/quotations/{denko_id}/duplicate")

@@ -5,7 +5,7 @@
 - Repository: `lukiahsa/crm-ahsa`
 - Baseline: `85e6e0e` (`Initial CRM Ahsa baseline`)
 - Branch implementasi: `agent/sprint-6-multi-identity`
-- Status regression: **9/9 lulus**
+- Status regression: **10/10 lulus**
 - Status working tree saat laporan dibuat: bersih setelah commit dokumentasi
 - Perubahan pada `main`: tidak ada
 
@@ -25,6 +25,8 @@ Aturan bisnis yang diterapkan:
 - Capability tidak dapat diubah dari UI.
 - Quotation legacy tanpa identity otomatis menggunakan identity `FULL` utama.
 - Quotation Ahsa dan Denko menggunakan satu template `quotation_print.html`.
+- Identity `QUOTATION_ONLY` selalu menonaktifkan seluruh footer pada server,
+  meskipun preference quotation atau request mengirim `show_footer=1`.
 
 ## 2. Struktur Database Baru
 
@@ -85,7 +87,7 @@ Data resmi Denko belum diisi. Seed hanya menyediakan nama perusahaan, nama brand
 | `GET/POST /quotations/add` | Default Ahsa dan validasi identity aktif |
 | `GET/POST /quotations/<id>/edit` | Edit identity; terkunci setelah conversion |
 | `GET /quotations/<id>` | Identity dan kelayakan conversion |
-| `POST /quotations/<id>/print-settings` | Capability server mengalahkan input user |
+| `POST /quotations/<id>/print-settings` | Capability dan `identity_type` server mengalahkan input user; footer `QUOTATION_ONLY` selalu disimpan nonaktif |
 | `GET /quotations/<id>/print` | Dynamic identity dan effective print settings |
 | `GET /quotations/<id>/whatsapp` | Nama pengirim mengikuti identity quotation |
 | `POST /quotations/<id>/duplicate` | Identity sumber dipertahankan |
@@ -133,7 +135,7 @@ Untuk Denko, server memastikan:
 - Website tidak dirender.
 - Signature Ahsa tidak dirender.
 - Logo/nama Ahsa tidak dirender.
-- Footer memakai data Denko yang tersedia.
+- Seluruh elemen `<footer>` tidak dirender.
 
 ## 5. Screenshot Alur Identity
 
@@ -168,6 +170,9 @@ Screenshot dirender dari response HTML aktual Flask menggunakan database QA seme
 - [x] Identity quotation terkunci setelah conversion.
 - [x] Manipulasi capability melalui settings POST diabaikan.
 - [x] QR/signature Denko tetap nonaktif meskipun request dimanipulasi.
+- [x] Footer Denko tetap tidak dirender meskipun request dan data legacy
+  memiliki `show_footer=1`.
+- [x] Footer Ahsa tetap mengikuti preference quotation.
 - [x] Invoice selalu Ahsa.
 - [x] Delivery Order selalu Ahsa.
 - [x] Receipt selalu Ahsa.
@@ -188,7 +193,7 @@ python -m unittest discover -s tests -p 'test_*.py' -v
 Hasil:
 
 ```text
-Ran 9 tests
+Ran 10 tests
 OK
 ```
 
@@ -204,7 +209,9 @@ Skenario otomatis:
 6. Delivery Order selalu identity FULL.
 7. Receipt selalu identity FULL.
 8. Purchase Order dan transaction print selalu identity FULL.
-9. Migration legacy, duplicate, lock identity, capability tampering, dan Jinja compilation.
+9. Manipulasi `show_footer=1` pada Denko tetap tidak merender elemen
+   `<footer>`, website, QR, atau signature Ahsa; footer Ahsa tetap tampil.
+10. Migration legacy, duplicate, lock identity, capability tampering, dan Jinja compilation.
 
 ## 8. Commit yang Dibuat
 
@@ -216,6 +223,7 @@ Skenario otomatis:
 | `9be5d2e` | `test(identity): cover multi-identity regression paths` |
 | `5977c3c` | `fix(identity): polish identity document layouts` |
 | Dokumentasi | `docs(sprint-6): add implementation report` |
+| Revisi wajib | `fix(identity): suppress all footer content for Denko quotations` |
 
 ## 9. Langkah Merge dan Deployment
 
