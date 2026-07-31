@@ -128,6 +128,24 @@ QUOTATION_STATUSES = (
     "Batal",
 )
 
+IDENTITY_TYPE_FULL = "FULL"
+IDENTITY_TYPE_QUOTATION_ONLY = "QUOTATION_ONLY"
+
+DOCUMENT_TYPE_QUOTATION = "QUOTATION"
+DOCUMENT_TYPE_TRANSACTION = "TRANSACTION"
+DOCUMENT_TYPE_INVOICE = "INVOICE"
+DOCUMENT_TYPE_DELIVERY_ORDER = "DELIVERY_ORDER"
+DOCUMENT_TYPE_RECEIPT = "RECEIPT"
+DOCUMENT_TYPE_PURCHASE_ORDER = "PURCHASE_ORDER"
+
+FULL_IDENTITY_DOCUMENT_TYPES = {
+    DOCUMENT_TYPE_TRANSACTION,
+    DOCUMENT_TYPE_INVOICE,
+    DOCUMENT_TYPE_DELIVERY_ORDER,
+    DOCUMENT_TYPE_RECEIPT,
+    DOCUMENT_TYPE_PURCHASE_ORDER,
+}
+
 INVOICE_PAYMENT_STATUSES = (
     "Belum Lunas",
     "DP",
@@ -552,21 +570,178 @@ NUMBERING_RESET_POLICIES = (
 )
 
 
-def get_company_profile(conn=None):
-    """Mengambil profil perusahaan tunggal dengan aman."""
+def get_default_full_identity(conn):
+    """Mengambil identity FULL utama tanpa bergantung nama atau code."""
+    return conn.execute(
+        """
+        SELECT *
+        FROM company_identities
+        WHERE identity_type = ?
+          AND is_default = 1
+        LIMIT 1
+        """,
+        (IDENTITY_TYPE_FULL,),
+    ).fetchone()
+
+
+def get_company_identity(conn, identity_id, active_only=False):
+    """Mengambil identity berdasarkan primary key dengan validasi status."""
+    if identity_id is None:
+        return None
+
+    query = "SELECT * FROM company_identities WHERE id = ?"
+    parameters = [identity_id]
+
+    if active_only:
+        query += " AND active = 1"
+
+    return conn.execute(query, parameters).fetchone()
+
+
+def get_active_quotation_identities(conn):
+    """Daftar identity yang dapat dipilih saat membuat quotation."""
+    return conn.execute(
+        """
+        SELECT *
+        FROM company_identities
+        WHERE active = 1
+          AND identity_type IN (?, ?)
+        ORDER BY is_default DESC, nama_perusahaan ASC
+        """,
+        (
+            IDENTITY_TYPE_FULL,
+            IDENTITY_TYPE_QUOTATION_ONLY,
+        ),
+    ).fetchall()
+
+
+def validate_quotation_identity(conn, identity_id):
+    """Validasi server-side identity yang dikirim form quotation."""
+    try:
+        normalized_identity_id = int(identity_id)
+    except (TypeError, ValueError):
+        raise ValueError("Identity quotation tidak valid.")
+
+    identity = get_company_identity(
+        conn,
+        normalized_identity_id,
+        active_only=True,
+    )
+
+    if identity is None or identity["identity_type"] not in (
+        IDENTITY_TYPE_FULL,
+        IDENTITY_TYPE_QUOTATION_ONLY,
+    ):
+        raise ValueError("Identity quotation tidak valid atau tidak aktif.")
+
+    return identity
+
+
+def get_effective_identity(
+    document_type,
+    quotation_id=None,
+    *,
+    conn=None,
+):
+    """
+    Menentukan identity efektif untuk seluruh dokumen.
+
+    Quotation mengikuti identity yang tersimpan. Quotation legacy tanpa
+    identity otomatis menggunakan identity FULL utama. Semua dokumen
+    transaksi selalu menggunakan identity FULL utama.
+    """
     close_after = False
 
     if conn is None:
         conn = get_connection()
         close_after = True
 
-    profile = conn.execute(
-        """
-        SELECT *
-        FROM company_profile
-        WHERE id = 1
-        """
-    ).fetchone()
+    normalized_document_type = str(document_type or "").strip().upper()
+
+    try:
+        if normalized_document_type == DOCUMENT_TYPE_QUOTATION:
+            if quotation_id is None:
+                raise ValueError(
+                    "quotation_id wajib diisi untuk document_type QUOTATION."
+                )
+
+            identity = conn.execute(
+                """
+                SELECT company_identities.*
+                FROM sales_quotations
+                LEFT JOIN company_identities
+                    ON sales_quotations.identity_id = company_identities.id
+                WHERE sales_quotations.id = ?
+                """,
+                (quotation_id,),
+            ).fetchone()
+
+            if identity is None or identity["id"] is None:
+                identity = get_default_full_identity(conn)
+
+            if identity is None:
+                raise RuntimeError(
+                    "Identity FULL utama belum tersedia."
+                )
+
+            return identity
+
+        if normalized_document_type in FULL_IDENTITY_DOCUMENT_TYPES:
+            identity = get_default_full_identity(conn)
+
+            if identity is None:
+                raise RuntimeError(
+                    "Identity FULL utama belum tersedia."
+                )
+
+            return identity
+
+        raise ValueError(
+            f"Document type identity tidak didukung: {document_type}."
+        )
+    finally:
+        if close_after:
+            conn.close()
+
+
+def get_effective_quotation_print_settings(quotation, identity):
+    """Gabungkan preferensi quotation dengan capability identity."""
+    return {
+        "show_discount": bool(quotation["show_discount"]),
+        "show_terbilang": bool(quotation["show_terbilang"]),
+        "show_qr": (
+            bool(quotation["show_qr"])
+            and bool(identity["allow_qr"])
+        ),
+        "show_catatan": bool(quotation["show_catatan"]),
+        "show_terms": bool(quotation["show_terms"]),
+        "show_bank": bool(quotation["show_bank"]),
+        "show_signature": (
+            bool(quotation["show_signature"])
+            and bool(identity["allow_signature"])
+        ),
+        "show_footer": bool(quotation["show_footer"]),
+        "show_website_footer": bool(identity["allow_website_footer"]),
+    }
+
+
+def identity_allows_transaction_conversion(identity):
+    """Identity FULL dapat memasuki workflow transaksi."""
+    return bool(
+        identity
+        and identity["identity_type"] == IDENTITY_TYPE_FULL
+    )
+
+
+def get_company_profile(conn=None):
+    """Compatibility layer deprecated; sumber data tetap identity FULL."""
+    close_after = False
+
+    if conn is None:
+        conn = get_connection()
+        close_after = True
+
+    profile = get_default_full_identity(conn)
 
     if close_after:
         conn.close()
@@ -1700,6 +1875,10 @@ def transactions():
 )
 def add_transaction():
     conn = get_connection()
+    transaction_identity = get_effective_identity(
+        DOCUMENT_TYPE_TRANSACTION,
+        conn=conn,
+    )
 
     customers_list = conn.execute(
         """
@@ -2106,6 +2285,7 @@ def add_transaction():
         "add_transaction.html",
         customers=customers_list,
         products=products_list,
+        identity=transaction_identity,
     )
 
 
@@ -2119,6 +2299,10 @@ def add_transaction():
 )
 def edit_transaction(transaction_id):
     conn = get_connection()
+    transaction_identity = get_effective_identity(
+        DOCUMENT_TYPE_TRANSACTION,
+        conn=conn,
+    )
 
     transaction = conn.execute(
         """
@@ -2387,6 +2571,7 @@ def edit_transaction(transaction_id):
         items=existing_items,
         customers=customers_list,
         products=products_list,
+        identity=transaction_identity,
     )
 
 
@@ -2448,6 +2633,10 @@ def update_transaction_status(transaction_id):
 )
 def transaction_detail(transaction_id):
     conn = get_connection()
+    transaction_identity = get_effective_identity(
+        DOCUMENT_TYPE_TRANSACTION,
+        conn=conn,
+    )
 
     transaction = conn.execute(
         """
@@ -2517,6 +2706,7 @@ def transaction_detail(transaction_id):
         purchase_order=purchase_order,
         transaction_statuses=TRANSACTION_STATUSES,
         invoice_payment_statuses=INVOICE_PAYMENT_STATUSES,
+        identity=transaction_identity,
     )
 
 
@@ -2529,6 +2719,10 @@ def transaction_detail(transaction_id):
 )
 def generate_invoice(transaction_id):
     conn = get_connection()
+    get_effective_identity(
+        DOCUMENT_TYPE_INVOICE,
+        conn=conn,
+    )
 
     transaction = conn.execute(
         """
@@ -2699,6 +2893,10 @@ def update_invoice_status(transaction_id):
 )
 def edit_invoice(transaction_id):
     conn = get_connection()
+    invoice_identity = get_effective_identity(
+        DOCUMENT_TYPE_INVOICE,
+        conn=conn,
+    )
 
     transaction = conn.execute(
         """
@@ -2831,6 +3029,7 @@ def edit_invoice(transaction_id):
         transaction=transaction,
         invoice=invoice,
         total_tagihan=total_tagihan,
+        identity=invoice_identity,
     )
 
 
@@ -2839,6 +3038,10 @@ def edit_invoice(transaction_id):
 )
 def print_invoice(transaction_id):
     conn = get_connection()
+    identity = get_effective_identity(
+        DOCUMENT_TYPE_INVOICE,
+        conn=conn,
+    )
 
     transaction = conn.execute(
         """
@@ -2929,7 +3132,7 @@ def print_invoice(transaction_id):
     )
 
     qr_payload = (
-        f"AHSA EQUIPMENT\n"
+        f"{identity['nama_brand']}\n"
         f"Invoice: {invoice['nomor_invoice']}\n"
         f"Customer: {transaction['customer_nama'] or '-'}\n"
         f"Total: Rp {total_tagihan:,.0f}\n"
@@ -2951,6 +3154,7 @@ def print_invoice(transaction_id):
         sisa_tagihan=sisa_tagihan,
         invoice_url=invoice_url,
         qr_code_data_uri=qr_code_data_uri,
+        identity=identity,
     )
 
 
@@ -2962,6 +3166,10 @@ def print_invoice(transaction_id):
 )
 def print_transaction(transaction_id):
     conn = get_connection()
+    identity = get_effective_identity(
+        DOCUMENT_TYPE_TRANSACTION,
+        conn=conn,
+    )
 
     transaction = conn.execute(
         """
@@ -3003,6 +3211,7 @@ def print_transaction(transaction_id):
         "transaction_print.html",
         transaction=transaction,
         items=items,
+        identity=identity,
     )
 
 
@@ -3050,10 +3259,15 @@ def quotations():
         SELECT
             sales_quotations.*,
             customers.nama AS customer_nama,
-            customers.instansi AS customer_instansi
+            customers.instansi AS customer_instansi,
+            company_identities.code AS identity_code,
+            company_identities.identity_type AS identity_type,
+            company_identities.nama_perusahaan AS identity_name
         FROM sales_quotations
         LEFT JOIN customers
             ON sales_quotations.customer_id = customers.id
+        LEFT JOIN company_identities
+            ON sales_quotations.identity_id = company_identities.id
         ORDER BY sales_quotations.id DESC
         """
     ).fetchall()
@@ -3191,6 +3405,9 @@ def insert_quotation_items(conn, quotation_id, prepared_items):
 def add_quotation():
     conn = get_connection()
 
+    identities_list = get_active_quotation_identities(conn)
+    default_identity = get_default_full_identity(conn)
+
     customers_list = conn.execute(
         """
         SELECT id, nama, instansi, kota
@@ -3202,6 +3419,11 @@ def add_quotation():
     products_list = get_products_for_form(conn)
 
     if request.method == "POST":
+        identity_id_raw = request.form.get("identity_id", "").strip()
+
+        if not identity_id_raw and default_identity is not None:
+            identity_id_raw = str(default_identity["id"])
+
         customer_id_raw = request.form.get("customer_id", "").strip()
         tanggal = request.form.get("tanggal", "").strip()
         berlaku_sampai = request.form.get("berlaku_sampai", "").strip()
@@ -3225,6 +3447,10 @@ def add_quotation():
             return "Tanggal penawaran wajib diisi.", 400
 
         try:
+            identity = validate_quotation_identity(
+                conn,
+                identity_id_raw,
+            )
             customer_id = int(customer_id_raw)
             prepared_items, subtotal_penawaran = (
                 prepare_quotation_items(conn, request.form)
@@ -3257,9 +3483,10 @@ def add_quotation():
                     diskon,
                     grand_total,
                     catatan,
-                    syarat_ketentuan
+                    syarat_ketentuan,
+                    identity_id
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     nomor_penawaran,
@@ -3274,6 +3501,7 @@ def add_quotation():
                     grand_total,
                     catatan or None,
                     syarat_ketentuan or None,
+                    identity["id"],
                 ),
             )
 
@@ -3313,6 +3541,10 @@ def add_quotation():
         "add_quotation.html",
         customers=customers_list,
         products=products_list,
+        identities=identities_list,
+        default_identity_id=(
+            default_identity["id"] if default_identity else None
+        ),
     )
 
 
@@ -3336,6 +3568,13 @@ def edit_quotation(quotation_id):
         conn.close()
         return "Penawaran tidak ditemukan.", 404
 
+    identities_list = get_active_quotation_identities(conn)
+    current_identity = get_effective_identity(
+        DOCUMENT_TYPE_QUOTATION,
+        quotation_id,
+        conn=conn,
+    )
+
     customers_list = conn.execute(
         """
         SELECT id, nama, instansi, kota
@@ -3357,6 +3596,10 @@ def edit_quotation(quotation_id):
     ).fetchall()
 
     if request.method == "POST":
+        identity_id_raw = request.form.get(
+            "identity_id",
+            str(current_identity["id"]),
+        ).strip()
         customer_id_raw = request.form.get("customer_id", "").strip()
         tanggal = request.form.get("tanggal", "").strip()
         berlaku_sampai = request.form.get("berlaku_sampai", "").strip()
@@ -3376,6 +3619,20 @@ def edit_quotation(quotation_id):
             return "Customer dan tanggal wajib diisi.", 400
 
         try:
+            identity = validate_quotation_identity(
+                conn,
+                identity_id_raw,
+            )
+
+            if (
+                quotation["converted_transaction_id"]
+                and identity["id"] != current_identity["id"]
+            ):
+                raise ValueError(
+                    "Identity quotation yang sudah dikonversi "
+                    "tidak dapat diubah."
+                )
+
             customer_id = int(customer_id_raw)
             prepared_items, subtotal_penawaran = (
                 prepare_quotation_items(conn, request.form)
@@ -3388,7 +3645,8 @@ def edit_quotation(quotation_id):
             conn.execute(
                 """
                 UPDATE sales_quotations
-                SET customer_id = ?,
+                SET identity_id = ?,
+                    customer_id = ?,
                     tanggal = ?,
                     berlaku_sampai = ?,
                     sales = ?,
@@ -3406,6 +3664,7 @@ def edit_quotation(quotation_id):
                 WHERE id = ?
                 """,
                 (
+                    identity["id"],
                     customer_id,
                     tanggal,
                     berlaku_sampai or None,
@@ -3456,6 +3715,8 @@ def edit_quotation(quotation_id):
         items=existing_items,
         customers=customers_list,
         products=products_list,
+        identities=identities_list,
+        current_identity=current_identity,
     )
 
 
@@ -3483,6 +3744,12 @@ def quotation_detail(quotation_id):
         conn.close()
         return "Penawaran tidak ditemukan.", 404
 
+    identity = get_effective_identity(
+        DOCUMENT_TYPE_QUOTATION,
+        quotation_id,
+        conn=conn,
+    )
+
     items = conn.execute(
         """
         SELECT *
@@ -3503,6 +3770,7 @@ def quotation_detail(quotation_id):
         (quotation_id,),
     ).fetchall()
 
+    can_convert = identity_allows_transaction_conversion(identity)
     conn.close()
 
     whatsapp_number = "".join(
@@ -3518,7 +3786,7 @@ def quotation_detail(quotation_id):
 
     whatsapp_message = (
         f"Yth. {quotation['customer_nama'] or 'Bapak/Ibu'}, "
-        f"berikut penawaran dari Ahsa Equipment "
+        f"berikut penawaran dari {identity['nama_brand']} "
         f"{quotation['nomor_penawaran']} dengan nilai "
         f"Rp {int(quotation['grand_total'] or 0):,.0f}. "
         f"Silakan hubungi kami apabila ada yang ingin didiskusikan."
@@ -3542,6 +3810,8 @@ def quotation_detail(quotation_id):
         whatsapp_number=whatsapp_number,
         whatsapp_message=whatsapp_message,
         activities=activities,
+        identity=identity,
+        can_convert=can_convert,
     )
 
 
@@ -3604,7 +3874,7 @@ def update_quotation_print_settings(quotation_id):
 
     quotation = conn.execute(
         """
-        SELECT id
+        SELECT *
         FROM sales_quotations
         WHERE id = ?
         """,
@@ -3614,6 +3884,12 @@ def update_quotation_print_settings(quotation_id):
     if quotation is None:
         conn.close()
         return "Penawaran tidak ditemukan.", 404
+
+    identity = get_effective_identity(
+        DOCUMENT_TYPE_QUOTATION,
+        quotation_id,
+        conn=conn,
+    )
 
     conn.execute(
         """
@@ -3633,11 +3909,19 @@ def update_quotation_print_settings(quotation_id):
         (
             checkbox_value(request.form, "show_discount"),
             checkbox_value(request.form, "show_terbilang"),
-            checkbox_value(request.form, "show_qr"),
+            (
+                checkbox_value(request.form, "show_qr")
+                if identity["allow_qr"]
+                else 0
+            ),
             checkbox_value(request.form, "show_catatan"),
             checkbox_value(request.form, "show_terms"),
             checkbox_value(request.form, "show_bank"),
-            checkbox_value(request.form, "show_signature"),
+            (
+                checkbox_value(request.form, "show_signature")
+                if identity["allow_signature"]
+                else 0
+            ),
             checkbox_value(request.form, "show_footer"),
             checkbox_value(request.form, "auto_hide_zero"),
             quotation_id,
@@ -3692,6 +3976,16 @@ def print_quotation(quotation_id):
         conn.close()
         return "Penawaran tidak ditemukan.", 404
 
+    identity = get_effective_identity(
+        DOCUMENT_TYPE_QUOTATION,
+        quotation_id,
+        conn=conn,
+    )
+    print_settings = get_effective_quotation_print_settings(
+        quotation,
+        identity,
+    )
+
     items = conn.execute(
         """
         SELECT *
@@ -3735,18 +4029,20 @@ def print_quotation(quotation_id):
         _external=True,
     )
 
-    qr_payload = (
-        f"AHSA EQUIPMENT\n"
-        f"Penawaran: {quotation['nomor_penawaran']}\n"
-        f"Customer: {quotation['customer_nama'] or '-'}\n"
-        f"Total: Rp {int(quotation['grand_total'] or 0):,.0f}\n"
-        f"Status: {quotation['status']}\n"
-        f"URL: {quotation_url}"
-    ).replace(",", ".")
+    qr_code_data_uri = None
 
-    qr_code_data_uri = buat_qr_data_uri(qr_payload)
+    if print_settings["show_qr"]:
+        qr_payload = (
+            f"{identity['nama_brand']}\n"
+            f"Penawaran: {quotation['nomor_penawaran']}\n"
+            f"Customer: {quotation['customer_nama'] or '-'}\n"
+            f"Total: Rp {int(quotation['grand_total'] or 0):,.0f}\n"
+            f"Status: {quotation['status']}\n"
+            f"URL: {quotation_url}"
+        ).replace(",", ".")
+        qr_code_data_uri = buat_qr_data_uri(qr_payload)
 
-    show_discount = bool(quotation["show_discount"])
+    show_discount = print_settings["show_discount"]
     auto_hide_zero = bool(quotation["auto_hide_zero"])
 
     if auto_hide_zero and int(quotation["diskon"] or 0) == 0:
@@ -3756,15 +4052,17 @@ def print_quotation(quotation_id):
         "quotation_print.html",
         quotation=quotation_data,
         items=items,
+        identity=identity,
         qr_code_data_uri=qr_code_data_uri,
         show_discount=show_discount,
-        show_terbilang=bool(quotation["show_terbilang"]),
-        show_qr=bool(quotation["show_qr"]),
-        show_catatan=bool(quotation["show_catatan"]),
-        show_terms=bool(quotation["show_terms"]),
-        show_bank=bool(quotation["show_bank"]),
-        show_signature=bool(quotation["show_signature"]),
-        show_footer=bool(quotation["show_footer"]),
+        show_terbilang=print_settings["show_terbilang"],
+        show_qr=print_settings["show_qr"],
+        show_catatan=print_settings["show_catatan"],
+        show_terms=print_settings["show_terms"],
+        show_bank=print_settings["show_bank"],
+        show_signature=print_settings["show_signature"],
+        show_footer=print_settings["show_footer"],
+        show_website_footer=print_settings["show_website_footer"],
     )
 
 
@@ -3792,6 +4090,12 @@ def send_quotation_whatsapp(quotation_id):
         conn.close()
         return "Penawaran tidak ditemukan.", 404
 
+    identity = get_effective_identity(
+        DOCUMENT_TYPE_QUOTATION,
+        quotation_id,
+        conn=conn,
+    )
+
     whatsapp_number = "".join(
         char
         for char in str(quotation["customer_whatsapp"] or "")
@@ -3807,7 +4111,7 @@ def send_quotation_whatsapp(quotation_id):
 
     message = (
         f"Yth. {quotation['customer_nama'] or 'Bapak/Ibu'}, "
-        f"berikut penawaran dari Ahsa Equipment "
+        f"berikut penawaran dari {identity['nama_brand']} "
         f"{quotation['nomor_penawaran']} dengan nilai "
         f"Rp {int(quotation['grand_total'] or 0):,.0f}. "
         f"Silakan hubungi kami apabila ada yang ingin didiskusikan."
@@ -3870,6 +4174,12 @@ def duplicate_quotation(quotation_id):
         conn.close()
         return "Penawaran tidak ditemukan.", 404
 
+    source_identity = get_effective_identity(
+        DOCUMENT_TYPE_QUOTATION,
+        quotation_id,
+        conn=conn,
+    )
+
     items = conn.execute(
         """
         SELECT *
@@ -3904,6 +4214,7 @@ def duplicate_quotation(quotation_id):
                 grand_total,
                 catatan,
                 syarat_ketentuan,
+                identity_id,
                 show_discount,
                 show_terbilang,
                 show_qr,
@@ -3916,7 +4227,7 @@ def duplicate_quotation(quotation_id):
             )
             VALUES (
                 ?, ?, ?, ?, ?, 'Draft', 0, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?, ?, ?, ?, ?
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )
             """,
             (
@@ -3930,6 +4241,7 @@ def duplicate_quotation(quotation_id):
                 source["grand_total"],
                 source["catatan"],
                 source["syarat_ketentuan"],
+                source_identity["id"],
                 source["show_discount"],
                 source["show_terbilang"],
                 source["show_qr"],
@@ -4075,6 +4387,20 @@ def convert_quotation_to_transaction(quotation_id):
     if quotation is None:
         conn.close()
         return "Penawaran tidak ditemukan.", 404
+
+    identity = get_effective_identity(
+        DOCUMENT_TYPE_QUOTATION,
+        quotation_id,
+        conn=conn,
+    )
+
+    if not identity_allows_transaction_conversion(identity):
+        conn.close()
+        return (
+            "Quotation Denko tidak dapat dikonversi menjadi Transaction. "
+            "Silakan buat ulang Quotation menggunakan Identity Ahsa.",
+            400,
+        )
 
     if quotation["converted_transaction_id"]:
         transaction_id = quotation["converted_transaction_id"]
@@ -4387,6 +4713,10 @@ def delivery_orders():
 )
 def generate_delivery_order(transaction_id):
     conn = get_connection()
+    get_effective_identity(
+        DOCUMENT_TYPE_DELIVERY_ORDER,
+        conn=conn,
+    )
 
     transaction = conn.execute(
         """
@@ -4945,6 +5275,10 @@ def update_delivery_order_status(delivery_order_id):
 )
 def print_delivery_order(delivery_order_id):
     conn = get_connection()
+    identity = get_effective_identity(
+        DOCUMENT_TYPE_DELIVERY_ORDER,
+        conn=conn,
+    )
 
     delivery_order = conn.execute(
         """
@@ -5003,7 +5337,7 @@ def print_delivery_order(delivery_order_id):
     )
 
     qr_payload = (
-        f"AHSA EQUIPMENT\n"
+        f"{identity['nama_brand']}\n"
         f"Surat Jalan: {delivery_order['nomor_surat_jalan']}\n"
         f"Transaksi: {delivery_order['nomor_transaksi']}\n"
         f"Customer: {delivery_order['customer_nama'] or '-'}\n"
@@ -5017,6 +5351,7 @@ def print_delivery_order(delivery_order_id):
         delivery_order=delivery_order_data,
         items=items,
         qr_code_data_uri=qr_code_data_uri,
+        identity=identity,
     )
 
 
@@ -5258,6 +5593,10 @@ def receipts():
 )
 def add_receipt(invoice_id):
     conn = get_connection()
+    get_effective_identity(
+        DOCUMENT_TYPE_RECEIPT,
+        conn=conn,
+    )
 
     invoice = conn.execute(
         """
@@ -5570,6 +5909,10 @@ def update_receipt_status(receipt_id):
 @app.route("/receipts/<int:receipt_id>/print")
 def print_receipt(receipt_id):
     conn = get_connection()
+    identity = get_effective_identity(
+        DOCUMENT_TYPE_RECEIPT,
+        conn=conn,
+    )
 
     receipt = conn.execute(
         """
@@ -5624,7 +5967,7 @@ def print_receipt(receipt_id):
     )
 
     qr_payload = (
-        f"AHSA EQUIPMENT\n"
+        f"{identity['nama_brand']}\n"
         f"Kwitansi: {receipt['nomor_kwitansi']}\n"
         f"Invoice: {receipt['nomor_invoice']}\n"
         f"Customer: {receipt['customer_nama'] or '-'}\n"
@@ -5638,6 +5981,7 @@ def print_receipt(receipt_id):
         "receipt_print.html",
         receipt=receipt_data,
         qr_code_data_uri=qr_code_data_uri,
+        identity=identity,
     )
 
 
@@ -6363,6 +6707,10 @@ def purchase_orders():
 )
 def add_purchase_order():
     conn = get_connection()
+    get_effective_identity(
+        DOCUMENT_TYPE_PURCHASE_ORDER,
+        conn=conn,
+    )
 
     supplier_rows = conn.execute(
         """
@@ -7060,7 +7408,10 @@ def print_purchase_order(purchase_order_id):
         conn.close()
         return "Purchase Order tidak ditemukan.", 404
 
-    company = get_company_profile(conn)
+    company = get_effective_identity(
+        DOCUMENT_TYPE_PURCHASE_ORDER,
+        conn=conn,
+    )
 
     print_settings = conn.execute(
         """
@@ -7566,8 +7917,27 @@ def settings_home():
 @app.route("/settings/company", methods=["GET", "POST"])
 def company_profile_settings():
     conn = get_connection()
+    identities = get_active_quotation_identities(conn)
 
     if request.method == "POST":
+        identity_id_raw = request.form.get("identity_id", "").strip()
+
+        try:
+            identity_id = int(identity_id_raw)
+        except (TypeError, ValueError):
+            conn.close()
+            return "Identity perusahaan tidak valid.", 400
+
+        profile = get_company_identity(
+            conn,
+            identity_id,
+            active_only=True,
+        )
+
+        if profile is None:
+            conn.close()
+            return "Identity perusahaan tidak ditemukan.", 404
+
         values = {
             "nama_perusahaan": request.form.get(
                 "nama_perusahaan",
@@ -7610,10 +7980,6 @@ def company_profile_settings():
                 "atas_nama",
                 "",
             ).strip(),
-            "logo_path": request.form.get(
-                "logo_path",
-                "",
-            ).strip(),
             "footer_invoice": request.form.get(
                 "footer_invoice",
                 "",
@@ -7646,7 +8012,7 @@ def company_profile_settings():
 
         conn.execute(
             """
-            UPDATE company_profile
+            UPDATE company_identities
             SET nama_perusahaan = ?,
                 nama_brand = ?,
                 alamat = ?,
@@ -7661,14 +8027,13 @@ def company_profile_settings():
                 bank = ?,
                 no_rekening = ?,
                 atas_nama = ?,
-                logo_path = ?,
                 footer_invoice = ?,
                 footer_quotation = ?,
                 footer_purchase_order = ?,
                 footer_delivery_order = ?,
                 footer_receipt = ?,
                 updated_at = CURRENT_TIMESTAMP
-            WHERE id = 1
+            WHERE id = ?
             """,
             (
                 values["nama_perusahaan"],
@@ -7685,26 +8050,47 @@ def company_profile_settings():
                 values["bank"] or None,
                 values["no_rekening"] or None,
                 values["atas_nama"] or None,
-                values["logo_path"] or None,
                 values["footer_invoice"] or None,
                 values["footer_quotation"] or None,
                 values["footer_purchase_order"] or None,
                 values["footer_delivery_order"] or None,
                 values["footer_receipt"] or None,
+                identity_id,
             ),
         )
 
         conn.commit()
         conn.close()
 
-        return redirect(url_for("company_profile_settings"))
+        return redirect(
+            url_for(
+                "company_profile_settings",
+                identity_id=identity_id,
+            )
+        )
 
-    profile = get_company_profile(conn)
+    selected_identity_id = request.args.get("identity_id", "").strip()
+
+    try:
+        selected_identity_id = int(selected_identity_id)
+    except (TypeError, ValueError):
+        selected_identity_id = None
+
+    profile = get_company_identity(
+        conn,
+        selected_identity_id,
+        active_only=True,
+    )
+
+    if profile is None:
+        profile = get_default_full_identity(conn)
+
     conn.close()
 
     return render_template(
         "company_profile_settings.html",
         profile=profile,
+        identities=identities,
     )
 
 
