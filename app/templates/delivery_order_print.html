@@ -18,7 +18,7 @@ table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{border:1px so
 <div class="toolbar"><a class="btn back" href="{{ url_for('delivery_order_detail', delivery_order_id=delivery_order['id']) }}">Kembali</a><button class="btn print" onclick="window.print()">Cetak / Simpan PDF</button></div>
 <main class="sheet"><div class="topshape"></div>
 <header class="header">
-<div class="logo-wrap"><img src="{{ url_for('static', filename='images/logo-ahsa.png') }}" alt="Ahsa Equipment"></div>
+<div class="logo-wrap"><img src="{{ url_for('static', filename=identity['logo_path']) }}" alt="{{ identity['nama_brand'] }}"></div>
 <div class="doc-title">SURAT JALAN</div>
 <div class="meta">
 <div class="row"><strong>No.</strong><span>:</span><span>{{ delivery_order["nomor_surat_jalan"] }}</span></div>
@@ -81,9 +81,9 @@ table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{border:1px so
 {% if qr_code_data_uri %}<div class="qr"><img src="{{ qr_code_data_uri }}"><div>Verifikasi Surat Jalan</div></div>{% endif %}
 
 <footer class="footer">
-<div class="footer-item"><div class="footer-icon wa-icon"><svg viewBox="0 0 24 24"><path fill="white" d="M12 2a9.5 9.5 0 0 0-8.2 14.3L2.5 21.5l5.3-1.4A9.5 9.5 0 1 0 12 2Zm0 17.2c-1.5 0-3-.4-4.2-1.2l-.3-.2-3.1.8.8-3-.2-.3A7.7 7.7 0 1 1 12 19.2Z"/></svg></div><div><strong>WHATSAPP</strong><span>0821 1712 6895</span></div></div>
-<div class="footer-item"><div class="footer-icon web-icon"><svg viewBox="0 0 24 24"><path fill="white" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm6.9 6h-3a15.8 15.8 0 0 0-1.4-3.1A8.1 8.1 0 0 1 18.9 8ZM12 4c.9 1.1 1.6 2.4 2 4h-4c.4-1.6 1.1-2.9 2-4Z"/></svg></div><div><strong>WEBSITE</strong><span>distributordalton.com</span></div></div>
-<div class="footer-item"><div class="footer-icon map-icon"><svg viewBox="0 0 24 24"><path fill="white" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5Z"/></svg></div><div><strong>ALAMAT</strong><span>Kawasan Industri De Primaterra<br>Jl. Raya Sapan Blok E2/11<br>Bandung, Jawa Barat</span></div></div>
+<div class="footer-item"><div class="footer-icon wa-icon"><svg viewBox="0 0 24 24"><path fill="white" d="M12 2a9.5 9.5 0 0 0-8.2 14.3L2.5 21.5l5.3-1.4A9.5 9.5 0 1 0 12 2Zm0 17.2c-1.5 0-3-.4-4.2-1.2l-.3-.2-3.1.8.8-3-.2-.3A7.7 7.7 0 1 1 12 19.2Z"/></svg></div><div><strong>WHATSAPP</strong><span>{{ identity['whatsapp'] or identity['telepon'] or '-' }}</span></div></div>
+<div class="footer-item"><div class="footer-icon web-icon"><svg viewBox="0 0 24 24"><path fill="white" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm6.9 6h-3a15.8 15.8 0 0 0-1.4-3.1A8.1 8.1 0 0 1 18.9 8ZM12 4c.9 1.1 1.6 2.4 2 4h-4c.4-1.6 1.1-2.9 2-4Z"/></svg></div><div><strong>WEBSITE</strong><span>{{ identity['website'] or '-' }}</span></div></div>
+<div class="footer-item"><div class="footer-icon map-icon"><svg viewBox="0 0 24 24"><path fill="white" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5Z"/></svg></div><div><strong>ALAMAT</strong><span>{{ identity['alamat'] or '-' }}{% if identity['kota'] %}<br>{{ identity['kota'] }}{% if identity['provinsi'] %}, {{ identity['provinsi'] }}{% endif %}{% endif %}</span></div></div>
 </footer>
 </main>
 </body>

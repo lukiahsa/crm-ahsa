@@ -6,11 +6,11 @@
 <style>
 *{box-sizing:border-box}@page{size:A4 portrait;margin:0}body{margin:0;background:#e9edf1;font-family:Arial,sans-serif;color:#111;font-size:10px}.toolbar{width:210mm;margin:12px auto 8px;display:flex;justify-content:flex-end;gap:8px}.btn{padding:9px 13px;border:0;border-radius:6px;color:#fff;text-decoration:none;cursor:pointer;font-weight:700}.back{background:#6f7880}.print{background:#0b4388}
 .sheet{width:210mm;min-height:297mm;margin:0 auto 20px;background:#fff;position:relative;padding:16mm 11mm 29mm;box-shadow:0 3px 15px rgba(0,0,0,.14);overflow:hidden}.sheet.no-footer{padding-bottom:15mm}.topshape{position:absolute;right:0;top:0;width:90mm;height:12mm;background:#0b4388}.topshape:after{content:"";position:absolute;right:0;width:17mm;height:12mm;background:#14933f}
-.header{display:grid;grid-template-columns:1fr 1.1fr .8fr;gap:8mm;align-items:start}.logo-wrap{width:64mm;height:22mm;overflow:hidden;display:flex;align-items:flex-start;justify-content:flex-start}.logo-wrap img{width:64mm;height:auto;display:block;transform:translateY(-1mm)}.doc-title{text-align:center;font-size:28px;font-weight:900;color:#0b4388;margin-top:2mm;letter-spacing:.2px;white-space:nowrap}.meta{border:1px solid #0b4388;border-radius:4px;padding:3mm}.row{display:grid;grid-template-columns:25mm 4mm 1fr;line-height:1.65}.customer{display:grid;grid-template-columns:1fr 1fr;gap:15mm;margin:9mm 0 5mm}.customer.single{grid-template-columns:1fr}.customer h3{margin:0 0 2mm}.customer p{margin:1mm 0}.bank{border-left:1px solid #bbb;padding-left:12mm}
+.header{display:grid;grid-template-columns:1fr 1fr 1.2fr;gap:6mm;align-items:start}.logo-wrap{width:64mm;height:22mm;overflow:hidden;display:flex;align-items:flex-start;justify-content:flex-start}.logo-wrap img{max-width:64mm;max-height:22mm;width:auto;height:auto;display:block}.logo-wrap.portrait{width:25mm;height:29mm}.logo-wrap.portrait img{max-width:25mm;max-height:29mm}.identity-name{font-size:8px;font-weight:900;color:#0b4388;margin-top:1mm}.doc-title{text-align:center;font-size:28px;font-weight:900;color:#0b4388;margin-top:2mm;letter-spacing:.2px;white-space:nowrap}.meta{border:1px solid #0b4388;border-radius:4px;padding:3mm}.row{display:grid;grid-template-columns:21mm 3mm 1fr;line-height:1.65}.customer{display:grid;grid-template-columns:1fr 1fr;gap:15mm;margin:9mm 0 5mm}.customer.single{grid-template-columns:1fr}.customer h3{margin:0 0 2mm}.customer p{margin:1mm 0}.bank{border-left:1px solid #bbb;padding-left:12mm}
 table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{border:1px solid #7d9ac0;padding:2.2mm 1.5mm;vertical-align:top}th{background:#0b4388;color:#fff;font-size:8px}.right{text-align:right}.spec{display:grid;grid-template-columns:15mm 3mm 1fr;line-height:1.45}.label{color:#6b7680}
 .bottom{display:grid;grid-template-columns:1fr 72mm;gap:4mm;margin-top:3mm}.bottom.single{grid-template-columns:1fr}.terbilang{border:1px solid #0b4388;border-radius:3px;padding:3.8mm 3mm;font-weight:700;text-transform:uppercase;min-height:11mm;display:flex;align-items:center}.notes{line-height:1.45}.notes h3{margin:3.2mm 0 1mm}.terms{font-size:9px}
 .summary{border:1px solid #0b4388;border-radius:3px;overflow:hidden;box-shadow:0 1px 0 rgba(11,67,136,.08)}.sumrow{display:flex;justify-content:space-between;padding:3mm;border-bottom:1px solid #0b4388}.grand{background:#12933f;color:#fff;font-size:13px;font-weight:900;border:0}.sign{display:grid;grid-template-columns:28mm 1fr;gap:7mm;align-items:end;margin-top:8mm}.qr{text-align:center;padding-top:2mm}.qr img{width:21mm}.signature{text-align:center}.signature-logo-wrap{width:52mm;height:18mm;overflow:hidden;margin:2mm auto 0;display:flex;align-items:flex-start;justify-content:center}.signature-logo-wrap img{width:52mm;height:auto;display:block;transform:translateY(-1mm)}.line-sign{border-top:1px dotted #111;margin-top:2mm;padding-top:2mm;font-weight:800}
-.footer{position:absolute;left:0;right:0;bottom:0;height:27mm;background:#0b4388;color:#fff;display:grid;grid-template-columns:1fr 1fr 1.75fr;align-items:center;padding:0 10mm;gap:4mm}.footer-item{display:grid;grid-template-columns:12mm 1fr;gap:3mm;align-items:center}.footer-item:not(:last-child){border-right:1px solid rgba(255,255,255,.55);padding-right:4mm}.footer-icon{width:10mm;height:10mm;border-radius:50%;display:grid;place-items:center}.footer-icon svg{width:7mm;height:7mm;display:block}.footer strong{display:block;color:#9ae5aa;font-size:7.5px;letter-spacing:.3px}.footer span{font-size:7.3px;line-height:1.45}.wa-icon{background:#13a84b}.web-icon{background:#256bb4}.map-icon{background:#ef3e3e}
+.footer{position:absolute;left:0;right:0;bottom:0;height:27mm;background:#0b4388;color:#fff;display:grid;grid-template-columns:1fr 1fr 1.75fr;align-items:center;padding:0 10mm;gap:4mm}.footer.no-website{grid-template-columns:1fr 1.75fr}.footer-item{display:grid;grid-template-columns:12mm 1fr;gap:3mm;align-items:center}.footer-item:not(:last-child){border-right:1px solid rgba(255,255,255,.55);padding-right:4mm}.footer-icon{width:10mm;height:10mm;border-radius:50%;display:grid;place-items:center}.footer-icon svg{width:7mm;height:7mm;display:block}.footer strong{display:block;color:#9ae5aa;font-size:7.5px;letter-spacing:.3px}.footer span{font-size:7.3px;line-height:1.45}.wa-icon{background:#13a84b}.web-icon{background:#256bb4}.map-icon{background:#ef3e3e}
 @media print{body{background:#fff}.toolbar{display:none}.sheet{margin:0;box-shadow:none}}
 </style>
 </head>
@@ -18,7 +18,7 @@ table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{border:1px so
 <div class="toolbar"><a class="btn back" href="{{ url_for('quotation_detail', quotation_id=quotation['id']) }}">Kembali</a><button class="btn print" onclick="window.print()">Cetak / Simpan PDF</button></div>
 <main class="sheet {% if not show_footer %}no-footer{% endif %}"><div class="topshape"></div>
 <header class="header">
-<div class="logo-wrap"><img src="{{ url_for('static', filename='images/logo-ahsa.png') }}" alt="Ahsa Equipment"></div>
+<div><div class="logo-wrap {% if identity['identity_type'] == 'QUOTATION_ONLY' %}portrait{% endif %}"><img src="{{ url_for('static', filename=identity['logo_path']) }}" alt="{{ identity['nama_brand'] }}"></div><div class="identity-name">{{ identity['nama_perusahaan'] }}</div></div>
 <div class="doc-title">PENAWARAN</div>
 <div class="meta">
 <div class="row"><strong>No.</strong><span>:</span><span>{{ quotation["nomor_penawaran"] }}</span></div>
@@ -30,7 +30,7 @@ table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{border:1px so
 <section class="customer {% if not show_bank %}single{% endif %}">
 <div><h3>Kepada Yth.</h3><p style="font-size:14px;font-weight:900">{{ quotation["customer_nama"] or "-" }}</p><p>{{ quotation["customer_instansi"] or "-" }}</p><p>{{ quotation["customer_kota"] or "-" }}</p></div>
 {% if show_bank %}
-<div class="bank"><h3>Rekening Pembayaran:</h3><div class="row"><span>Bank</span><span>:</span><strong>BCA</strong></div><div class="row"><span>No. Rek.</span><span>:</span><strong>1483353085</strong></div><div class="row"><span>a.n.</span><span>:</span><strong>PT Ahsa Cahaya Persada</strong></div><div class="row"><span>Website</span><span>:</span><strong>distributordalton.com</strong></div></div>
+<div class="bank"><h3>Rekening Pembayaran:</h3><div class="row"><span>Bank</span><span>:</span><strong>{{ identity['bank'] or '-' }}</strong></div><div class="row"><span>No. Rek.</span><span>:</span><strong>{{ identity['no_rekening'] or '-' }}</strong></div><div class="row"><span>a.n.</span><span>:</span><strong>{{ identity['atas_nama'] or identity['nama_perusahaan'] }}</strong></div>{% if show_website_footer and identity['website'] %}<div class="row"><span>Website</span><span>:</span><strong>{{ identity['website'] }}</strong></div>{% endif %}{% if identity['email'] %}<div class="row"><span>Email</span><span>:</span><strong>{{ identity['email'] }}</strong></div>{% endif %}</div>
 {% endif %}
 </section>
 
@@ -66,31 +66,33 @@ table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{border:1px so
 {% if show_qr or show_signature %}
 <div class="sign" style="{% if not show_qr %}grid-template-columns:1fr;{% elif not show_signature %}grid-template-columns:1fr;{% endif %}">
 {% if show_qr %}<div class="qr">{% if qr_code_data_uri %}<img src="{{ qr_code_data_uri }}"><div>Verifikasi Penawaran</div>{% endif %}</div>{% endif %}
-{% if show_signature %}<div class="signature"><div>Hormat kami,</div><div class="signature-logo-wrap"><img src="{{ url_for('static', filename='images/logo-ahsa.png') }}" alt="Ahsa Equipment"></div><div class="line-sign">AHSA EQUIPMENT</div><small>PT Ahsa Cahaya Persada</small></div>{% endif %}
+{% if show_signature %}<div class="signature"><div>Hormat kami,</div>{% if identity['signature_path'] %}<div class="signature-logo-wrap"><img src="{{ url_for('static', filename=identity['signature_path']) }}" alt="{{ identity['nama_brand'] }}"></div>{% endif %}<div class="line-sign">{{ identity['signature_name'] or identity['nama_brand'] }}</div><small>{{ identity['nama_perusahaan'] }}</small></div>{% endif %}
 </div>
 {% endif %}
 </div>
 </section>
 
 {% if show_footer %}
-<footer class="footer">
+<footer class="footer {% if not show_website_footer or not identity['website'] %}no-website{% endif %}">
 <div class="footer-item">
 <div class="footer-icon wa-icon">
 <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="white" d="M12 2a9.5 9.5 0 0 0-8.2 14.3L2.5 21.5l5.3-1.4A9.5 9.5 0 1 0 12 2Zm0 17.2c-1.5 0-3-.4-4.2-1.2l-.3-.2-3.1.8.8-3-.2-.3A7.7 7.7 0 1 1 12 19.2Zm4.2-5.8c-.2-.1-1.4-.7-1.6-.8-.2-.1-.4-.1-.6.1l-.8 1c-.2.2-.3.2-.6.1a6.4 6.4 0 0 1-3.1-2.7c-.2-.3 0-.5.1-.6l.5-.6c.2-.2.2-.4.3-.6 0-.2 0-.4-.1-.6l-.7-1.7c-.2-.5-.4-.5-.6-.5h-.5c-.2 0-.5.1-.7.3-.3.3-1 1-1 2.4s1 2.8 1.2 3c.1.2 2 3.2 5 4.4 3 .9 3 .6 3.6.6.5 0 1.7-.7 1.9-1.3.2-.7.2-1.2.2-1.3-.1-.1-.3-.2-.5-.3Z"/></svg>
 </div>
-<div><strong>WHATSAPP</strong><span>0821 1712 6895</span></div>
+<div><strong>{% if identity['whatsapp'] %}WHATSAPP{% else %}EMAIL{% endif %}</strong><span>{{ identity['whatsapp'] or identity['email'] or '-' }}</span></div>
 </div>
+{% if show_website_footer and identity['website'] %}
 <div class="footer-item">
 <div class="footer-icon web-icon">
 <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="white" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm6.9 6h-3a15.8 15.8 0 0 0-1.4-3.1A8.1 8.1 0 0 1 18.9 8ZM12 4c.9 1.1 1.6 2.4 2 4h-4c.4-1.6 1.1-2.9 2-4ZM9.5 4.9A15.8 15.8 0 0 0 8.1 8h-3a8.1 8.1 0 0 1 4.4-3.1ZM4.3 10h3.4a16.6 16.6 0 0 0 0 4H4.3a8 8 0 0 1 0-4Zm.8 6h3a15.8 15.8 0 0 0 1.4 3.1A8.1 8.1 0 0 1 5.1 16Zm6.9 4c-.9-1.1-1.6-2.4-2-4h4c-.4 1.6-1.1 2.9-2 4Zm2.4-6H9.6a14.2 14.2 0 0 1 0-4h4.8a14.2 14.2 0 0 1 0 4Zm.1 5.1a15.8 15.8 0 0 0 1.4-3.1h3a8.1 8.1 0 0 1-4.4 3.1Zm1.8-5.1a16.6 16.6 0 0 0 0-4h3.4a8 8 0 0 1 0 4h-3.4Z"/></svg>
 </div>
-<div><strong>WEBSITE</strong><span>distributordalton.com</span></div>
+<div><strong>WEBSITE</strong><span>{{ identity['website'] }}</span></div>
 </div>
+{% endif %}
 <div class="footer-item">
 <div class="footer-icon map-icon">
 <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="white" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5Z"/></svg>
 </div>
-<div><strong>ALAMAT</strong><span>Kawasan Industri De Primaterra<br>Jl. Raya Sapan Blok E2/11<br>Bandung, Jawa Barat</span></div>
+<div><strong>{{ identity['nama_perusahaan'] }}</strong><span>{% if identity['footer_quotation'] %}{{ identity['footer_quotation'] }}<br>{% endif %}{{ identity['alamat'] or '-' }}{% if identity['kota'] %}<br>{{ identity['kota'] }}{% if identity['provinsi'] %}, {{ identity['provinsi'] }}{% endif %}{% endif %}</span></div>
 </div>
 </footer>
 {% endif %}
