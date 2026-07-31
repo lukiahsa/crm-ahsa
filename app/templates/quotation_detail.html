@@ -19,13 +19,14 @@ table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{border:1px so
 .settings-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.setting{border:1px solid #d6e0e7;border-radius:8px;padding:11px;display:flex;align-items:center;gap:9px;background:#fbfcfd}
 .setting input{width:17px;height:17px;accent-color:#0b4388}.setting label{font-size:12px;font-weight:700;cursor:pointer}.settings-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
 .hint{font-size:11px;color:#6c7882;margin:0}
+.identity-notice{background:#fff4d6;border:1px solid #f0c35a;color:#704d00;padding:12px 14px;border-radius:8px;margin-bottom:16px;line-height:1.45}.blocked{background:#c8cdd1;color:#505960;cursor:not-allowed}
 .timeline{position:relative;margin-top:8px}.activity{display:grid;grid-template-columns:18px 1fr;gap:10px;padding-bottom:15px;position:relative}.activity:not(:last-child):before{content:"";position:absolute;left:8px;top:18px;bottom:0;width:2px;background:#d9e3ea}.dot{width:18px;height:18px;border-radius:50%;background:#0b4388;border:4px solid #dcecff;z-index:1}.activity-card{border:1px solid #d6e0e7;border-radius:8px;padding:10px;background:#fbfcfd}.activity-head{display:flex;justify-content:space-between;gap:10px;margin-bottom:4px}.activity-head strong{color:#0b4388}.activity-time{font-size:10px;color:#75818a}.activity-desc{font-size:12px;line-height:1.4}.activity-by{font-size:10px;color:#75818a;margin-top:5px}@media(max-width:800px){.top{flex-direction:column}.info,.bottom,.settings-grid{grid-template-columns:1fr}.card{overflow:auto}table{min-width:920px}}
 </style>
 </head>
 <body>
 <main class="container">
 <div class="top">
-<div><div class="sub" style="font-weight:800;letter-spacing:1px;color:#6d7882">QUOTATION</div><h1>{{ quotation["nomor_penawaran"] }}</h1><div class="sub">Detail penawaran resmi Ahsa Equipment</div></div>
+<div><div class="sub" style="font-weight:800;letter-spacing:1px;color:#6d7882">QUOTATION</div><h1>{{ quotation["nomor_penawaran"] }}</h1><div class="sub">Identity: <strong>{{ identity['nama_perusahaan'] }}</strong></div></div>
 <div class="actions">
 <a class="btn gray" href="{{ url_for('quotations') }}">Daftar</a>
 <a class="btn orange" href="{{ url_for('edit_quotation', quotation_id=quotation['id']) }}">Edit</a>
@@ -35,6 +36,8 @@ table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{border:1px so
 {% endif %}
 {% if quotation["converted_transaction_id"] %}
 <a class="btn green" href="{{ url_for('transaction_detail', transaction_id=quotation['converted_transaction_id']) }}">Lihat Transaksi</a>
+{% elif not can_convert %}
+<button class="btn blocked" type="button" disabled>Convert Tidak Tersedia</button>
 {% else %}
 <form method="POST" action="{{ url_for('convert_quotation_to_transaction', quotation_id=quotation['id']) }}" onsubmit="return confirm('Convert penawaran ini menjadi transaksi?');">
 <button class="btn green" type="submit">Convert ke Transaksi</button>
@@ -42,6 +45,8 @@ table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{border:1px so
 {% endif %}
 </div>
 </div>
+
+{% if not can_convert %}<div class="identity-notice"><strong>Quotation PDF Only.</strong> Quotation dengan identity {{ identity['nama_perusahaan'] }} tidak dapat dikonversi menjadi Transaction. Silakan buat ulang quotation menggunakan identity FULL.</div>{% endif %}
 
 <section class="card">
 <div class="info">
@@ -51,6 +56,7 @@ table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{border:1px so
 <div class="box"><small>Tanggal</small><strong>{{ quotation["tanggal_format"] }}</strong></div>
 <div class="box"><small>Berlaku Sampai</small><strong>{{ quotation["berlaku_sampai_format"] }}</strong></div>
 <div class="box"><small>Sales</small><strong>{{ quotation["sales"] or "-" }}</strong></div>
+<div class="box"><small>Identity</small><strong>{{ identity["nama_perusahaan"] }}</strong></div>
 </div>
 </section>
 
@@ -133,11 +139,11 @@ table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{border:1px so
 <div class="settings-grid">
 <div class="setting"><input type="checkbox" id="show_discount" name="show_discount" value="1" {% if quotation["show_discount"] %}checked{% endif %}><label for="show_discount">Tampilkan Diskon</label></div>
 <div class="setting"><input type="checkbox" id="show_terbilang" name="show_terbilang" value="1" {% if quotation["show_terbilang"] %}checked{% endif %}><label for="show_terbilang">Tampilkan Terbilang</label></div>
-<div class="setting"><input type="checkbox" id="show_qr" name="show_qr" value="1" {% if quotation["show_qr"] %}checked{% endif %}><label for="show_qr">Tampilkan QR Code</label></div>
+<div class="setting"><input type="checkbox" id="show_qr" name="show_qr" value="1" {% if quotation["show_qr"] and identity['allow_qr'] %}checked{% endif %} {% if not identity['allow_qr'] %}disabled{% endif %}><label for="show_qr">Tampilkan QR Code{% if not identity['allow_qr'] %} (tidak tersedia){% endif %}</label></div>
 <div class="setting"><input type="checkbox" id="show_catatan" name="show_catatan" value="1" {% if quotation["show_catatan"] %}checked{% endif %}><label for="show_catatan">Tampilkan Catatan</label></div>
 <div class="setting"><input type="checkbox" id="show_terms" name="show_terms" value="1" {% if quotation["show_terms"] %}checked{% endif %}><label for="show_terms">Tampilkan Syarat & Ketentuan</label></div>
 <div class="setting"><input type="checkbox" id="show_bank" name="show_bank" value="1" {% if quotation["show_bank"] %}checked{% endif %}><label for="show_bank">Tampilkan Rekening</label></div>
-<div class="setting"><input type="checkbox" id="show_signature" name="show_signature" value="1" {% if quotation["show_signature"] %}checked{% endif %}><label for="show_signature">Tampilkan Tanda Tangan</label></div>
+<div class="setting"><input type="checkbox" id="show_signature" name="show_signature" value="1" {% if quotation["show_signature"] and identity['allow_signature'] %}checked{% endif %} {% if not identity['allow_signature'] %}disabled{% endif %}><label for="show_signature">Tampilkan Tanda Tangan{% if not identity['allow_signature'] %} (tidak tersedia){% endif %}</label></div>
 <div class="setting"><input type="checkbox" id="show_footer" name="show_footer" value="1" {% if quotation["show_footer"] %}checked{% endif %}><label for="show_footer">Tampilkan Footer</label></div>
 <div class="setting"><input type="checkbox" id="auto_hide_zero" name="auto_hide_zero" value="1" {% if quotation["auto_hide_zero"] %}checked{% endif %}><label for="auto_hide_zero">Sembunyikan Diskon Rp 0</label></div>
 </div>

@@ -63,6 +63,7 @@
         .document-title h2 { margin: 0; }
 
         .company h1 { font-size: 20px; }
+        .company-logo { max-width: 165px; max-height: 48px; object-fit: contain; }
         .company p { margin: 4px 0 0; color: #444; line-height: 1.4; }
 
         .document-title { text-align: right; }
@@ -180,7 +181,8 @@
     <main class="sheet">
         <header class="document-header">
             <div class="company">
-                <h1>AHSA EQUIPMENT</h1>
+                <img class="company-logo" src="{{ url_for('static', filename=identity['logo_path']) }}" alt="{{ identity['nama_brand'] }}">
+                <h1>{{ identity["nama_brand"]|upper }}</h1>
                 <p>Ringkasan internal transaksi penjualan</p>
             </div>
 
@@ -272,7 +274,7 @@
         </section>
 
         <div class="footer-note">
-            Dokumen ini merupakan ringkasan internal transaksi Ahsa Equipment dan bukan invoice pelanggan.
+            Dokumen ini merupakan ringkasan internal transaksi {{ identity["nama_perusahaan"] }} dan bukan invoice pelanggan.
         </div>
     </main>
 </body>

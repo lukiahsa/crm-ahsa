@@ -13,23 +13,34 @@
 label{display:block;font-weight:700;margin-bottom:6px;font-size:12px}input,textarea{width:100%;padding:10px;border:1px solid #cbd6df;border-radius:7px;font:inherit}textarea{min-height:85px;resize:vertical}
 .btn{display:inline-block;padding:10px 15px;border:0;border-radius:7px;text-decoration:none;font-weight:800;cursor:pointer}.blue{background:#0b4388;color:#fff}.gray{background:#6d7882;color:#fff}
 .actions{display:flex;justify-content:flex-end;gap:8px}.note{font-size:12px;line-height:1.5;color:#6d7882;background:#f6f9fb;border:1px solid #dde6ec;padding:12px;border-radius:8px}
+.identity-tabs{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:16px}.identity-tab{padding:10px 13px;border-radius:8px;border:1px solid #cbd6df;background:#fff;color:#17212b;text-decoration:none;font-weight:800;font-size:12px}.identity-tab.active{background:#0b4388;color:#fff;border-color:#0b4388}.system-grid{display:grid;grid-template-columns:110px 1fr;gap:16px;align-items:center}.logo-preview{max-width:100px;max-height:58px}.system-badges{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}.system-badge{padding:5px 8px;border-radius:999px;background:#eaf2ff;color:#0b4388;font-size:10px;font-weight:800}.system-badge.off{background:#edf0f2;color:#6d7882}
 @media(max-width:720px){.grid{grid-template-columns:1fr}.full{grid-column:auto}.head{flex-direction:column}}
 </style>
 </head>
 <body>
 <main class="container">
 <div class="head">
-<div><h1>🏢 Profil Perusahaan</h1><div class="sub">Satu sumber data untuk seluruh dokumen ERP.</div></div>
+<div><h1>🏢 Company Identities</h1><div class="sub">Single source of truth identitas dokumen ERP.</div></div>
 <a class="btn gray" href="{{ url_for('settings_home') }}">Pengaturan ERP</a>
 </div>
+<nav class="identity-tabs" aria-label="Pilih identity">
+{% for identity in identities %}<a class="identity-tab {% if identity['id'] == profile['id'] %}active{% endif %}" href="{{ url_for('company_profile_settings', identity_id=identity['id']) }}">{{ identity['nama_perusahaan'] }}</a>{% endfor %}
+</nav>
 <form method="POST">
+<input type="hidden" name="identity_id" value="{{ profile['id'] }}">
+<section class="card">
+<h2 class="section-title">Aturan Sistem</h2>
+<div class="system-grid">
+<img class="logo-preview" src="{{ url_for('static', filename=profile['logo_path']) }}" alt="{{ profile['nama_brand'] }}">
+<div><strong>{{ profile['code'] }} · {{ profile['identity_type'] }}</strong><div class="system-badges"><span class="system-badge {% if not profile['allow_qr'] %}off{% endif %}">QR {{ 'Aktif' if profile['allow_qr'] else 'Nonaktif' }}</span><span class="system-badge {% if not profile['allow_signature'] %}off{% endif %}">Signature {{ 'Aktif' if profile['allow_signature'] else 'Nonaktif' }}</span><span class="system-badge {% if not profile['allow_website_footer'] %}off{% endif %}">Website Footer {{ 'Aktif' if profile['allow_website_footer'] else 'Nonaktif' }}</span><span class="system-badge {% if not profile['allow_transaction_conversion'] %}off{% endif %}">Konversi {{ 'Aktif' if profile['allow_transaction_conversion'] else 'Nonaktif' }}</span></div><p class="note">Identity type, logo, dan capability merupakan aturan sistem dan tidak dapat diubah dari UI.</p></div>
+</div>
+</section>
 <section class="card">
 <h2 class="section-title">Identitas Perusahaan</h2>
 <div class="grid">
 <div><label>Nama Perusahaan</label><input name="nama_perusahaan" value="{{ profile['nama_perusahaan'] or '' }}" required></div>
 <div><label>Nama Brand</label><input name="nama_brand" value="{{ profile['nama_brand'] or '' }}" required></div>
 <div><label>NPWP</label><input name="npwp" value="{{ profile['npwp'] or '' }}"></div>
-<div><label>Path Logo</label><input name="logo_path" value="{{ profile['logo_path'] or '' }}" placeholder="static/images/logo-ahsa.png"></div>
 <div class="full"><label>Alamat</label><textarea name="alamat">{{ profile['alamat'] or '' }}</textarea></div>
 <div><label>Kota</label><input name="kota" value="{{ profile['kota'] or '' }}"></div>
 <div><label>Provinsi</label><input name="provinsi" value="{{ profile['provinsi'] or '' }}"></div>
@@ -59,18 +70,22 @@ label{display:block;font-weight:700;margin-bottom:6px;font-size:12px}input,texta
 <section class="card">
 <h2 class="section-title">Footer Dokumen</h2>
 <div class="grid">
+{% if profile['identity_type'] == 'FULL' %}
 <div><label>Footer Invoice</label><textarea name="footer_invoice">{{ profile['footer_invoice'] or '' }}</textarea></div>
+{% endif %}
 <div><label>Footer Quotation</label><textarea name="footer_quotation">{{ profile['footer_quotation'] or '' }}</textarea></div>
+{% if profile['identity_type'] == 'FULL' %}
 <div><label>Footer Purchase Order</label><textarea name="footer_purchase_order">{{ profile['footer_purchase_order'] or '' }}</textarea></div>
 <div><label>Footer Surat Jalan</label><textarea name="footer_delivery_order">{{ profile['footer_delivery_order'] or '' }}</textarea></div>
 <div class="full"><label>Footer Kwitansi</label><textarea name="footer_receipt">{{ profile['footer_receipt'] or '' }}</textarea></div>
+{% endif %}
 </div>
-<p class="note">Foundation ini menyimpan data terpusat. Integrasi otomatis ke seluruh template lama akan dilakukan bertahap agar dokumen yang sudah stabil tidak rusak.</p>
+<p class="note">Semua template dokumen membaca data dari company identity aktif. Identity QUOTATION_ONLY hanya digunakan oleh quotation.</p>
 </section>
 
 <div class="actions">
 <a class="btn gray" href="{{ url_for('settings_home') }}">Batal</a>
-<button class="btn blue" type="submit">Simpan Profil</button>
+<button class="btn blue" type="submit">Simpan Identity</button>
 </div>
 </form>
 </main>

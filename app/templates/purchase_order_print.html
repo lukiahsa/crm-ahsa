@@ -142,16 +142,16 @@ font-size:8.2px
 
 <header class="header">
 <div class="logo-wrap">
-<img src="{{ url_for('static', filename='images/logo-ahsa.png') }}" alt="Ahsa Equipment">
+<img src="{{ url_for('static', filename=company['logo_path']) }}" alt="{{ company['nama_brand'] }}">
 </div>
 
 <div class="company-block">
-<h2>{{ company["nama_perusahaan"] if company else "PT Ahsa Cahaya Persada" }}</h2>
-<div class="company-line"><span>⌖</span><span>{{ company["alamat"] if company else "" }}{% if company and company["kota"] %}, {{ company["kota"] }}{% endif %}</span></div>
-<div class="company-line"><span>☎</span><span>{{ company["whatsapp"] if company else "-" }}</span></div>
-<div class="company-line"><span>●</span><span>{{ company["website"] if company else "-" }}</span></div>
-<div class="company-line"><span>✉</span><span>{{ company["email"] if company and company["email"] else "-" }}</span></div>
-<div class="company-line"><span>▣</span><span>NPWP: {{ company["npwp"] if company and company["npwp"] else "-" }}</span></div>
+<h2>{{ company["nama_perusahaan"] }}</h2>
+<div class="company-line"><span>⌖</span><span>{{ company["alamat"] or "-" }}{% if company["kota"] %}, {{ company["kota"] }}{% endif %}</span></div>
+<div class="company-line"><span>☎</span><span>{{ company["whatsapp"] or company["telepon"] or "-" }}</span></div>
+<div class="company-line"><span>●</span><span>{{ company["website"] or "-" }}</span></div>
+<div class="company-line"><span>✉</span><span>{{ company["email"] or "-" }}</span></div>
+<div class="company-line"><span>▣</span><span>NPWP: {{ company["npwp"] or "-" }}</span></div>
 </div>
 
 <div class="doc-block">
@@ -189,7 +189,7 @@ font-size:8.2px
 </section>
 
 <section class="items-wrap">
-<img class="watermark" src="{{ url_for('static', filename='images/logo-ahsa.png') }}" alt="">
+<img class="watermark" src="{{ url_for('static', filename=company['logo_path']) }}" alt="">
 <table>
 <thead>
 <tr>
@@ -249,9 +249,9 @@ font-size:8.2px
 <div class="sign-box">
 <div>Disiapkan oleh,</div>
 <div class="sign-space"></div>
-<div class="sign-name">Luki Lukmanul Hakim</div>
+<div class="sign-name">{{ company["signature_name"] or company["nama_brand"] }}</div>
 <div>Owner</div>
-<div>Ahsa Equipment</div>
+<div>{{ company["nama_brand"] }}</div>
 </div>
 <div class="sign-box">
 <div>Disetujui Supplier,</div>
@@ -264,20 +264,20 @@ font-size:8.2px
 <section class="footer-area">
 <div class="footer-cell">
 <div class="footer-title">REKENING PERUSAHAAN</div>
-<div class="footer-line"><strong>{{ company["bank"] if company and company["bank"] else "BCA" }}</strong></div>
-<div class="footer-line">{{ company["no_rekening"] if company and company["no_rekening"] else "-" }}</div>
-<div class="footer-line">a.n. {{ company["atas_nama"] if company and company["atas_nama"] else company["nama_perusahaan"] }}</div>
+<div class="footer-line"><strong>{{ company["bank"] or "-" }}</strong></div>
+<div class="footer-line">{{ company["no_rekening"] or "-" }}</div>
+<div class="footer-line">a.n. {{ company["atas_nama"] or company["nama_perusahaan"] }}</div>
 </div>
 <div class="footer-cell">
 <div class="footer-title">KONTAK KAMI</div>
-<div class="footer-line">☎ {{ company["whatsapp"] if company else "-" }}</div>
-<div class="footer-line">✉ {{ company["email"] if company and company["email"] else "-" }}</div>
-<div class="footer-line">● {{ company["website"] if company else "-" }}</div>
-<div class="footer-line">⌖ {{ company["kota"] if company and company["kota"] else "Garut" }}, {{ company["provinsi"] if company and company["provinsi"] else "Jawa Barat" }}</div>
+<div class="footer-line">☎ {{ company["whatsapp"] or company["telepon"] or "-" }}</div>
+<div class="footer-line">✉ {{ company["email"] or "-" }}</div>
+<div class="footer-line">● {{ company["website"] or "-" }}</div>
+<div class="footer-line">⌖ {{ company["kota"] or "-" }}{% if company["provinsi"] %}, {{ company["provinsi"] }}{% endif %}</div>
 </div>
 <div class="footer-cell">
 <div class="footer-title">INFORMASI PERUSAHAAN</div>
-<div class="footer-line">NPWP &nbsp;&nbsp;: {{ company["npwp"] if company and company["npwp"] else "-" }}</div>
+<div class="footer-line">NPWP &nbsp;&nbsp;: {{ company["npwp"] or "-" }}</div>
 <div class="footer-line">NIB &nbsp;&nbsp;&nbsp;&nbsp;: -</div>
 <div class="footer-line" style="margin-top:4mm">Distributor Peralatan Industri dan Material Handling</div>
 </div>

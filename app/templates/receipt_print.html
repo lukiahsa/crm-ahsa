@@ -15,9 +15,9 @@
 </head>
 <body>
 <div class="toolbar"><a class="btn back" href="{{ url_for('receipt_detail', receipt_id=receipt['id']) }}">Kembali</a><button class="btn print" onclick="window.print()">Cetak / Simpan PDF</button></div>
-<main class="sheet"><div class="watermark"><img src="{{ url_for('static', filename='images/logo-ahsa.png') }}" alt=""></div><div class="topshape"></div>
+<main class="sheet"><div class="watermark"><img src="{{ url_for('static', filename=identity['logo_path']) }}" alt=""></div><div class="topshape"></div>
 <header class="header">
-<div class="logo-wrap"><img src="{{ url_for('static', filename='images/logo-ahsa.png') }}" alt="Ahsa Equipment"></div>
+<div class="logo-wrap"><img src="{{ url_for('static', filename=identity['logo_path']) }}" alt="{{ identity['nama_brand'] }}"></div>
 <div class="doc-title">KWITANSI</div>
 <div class="meta"><div class="row"><strong>No. Kwitansi</strong><span>:</span><span class="receipt-number">{{ receipt["nomor_kwitansi"] }}</span></div><div class="row"><strong>Tanggal</strong><span>:</span><span>{{ receipt["tanggal_format"] }}</span></div></div>
 </header>
@@ -36,7 +36,7 @@
 </section>
 
 <section class="signatures">
-<div><div>Penerima,</div><div class="signature-logo-wrap"><img src="{{ url_for('static', filename='images/logo-ahsa.png') }}"></div><div class="sign-line">AHSA EQUIPMENT</div><small>PT Ahsa Cahaya Persada</small></div>
+<div><div>Penerima,</div><div class="signature-logo-wrap"><img src="{{ url_for('static', filename=identity['signature_path'] or identity['logo_path']) }}"></div><div class="sign-line">{{ identity['signature_name'] or identity['nama_brand'] }}</div><small>{{ identity['nama_perusahaan'] }}</small></div>
 <div><div>Hormat kami,</div><div class="signature-space"></div><div class="sign-line">{{ receipt["sales"] or "Sales / Finance" }}</div></div>
 </section>
 
@@ -49,7 +49,7 @@
 <path fill="white" d="M12 2a9.5 9.5 0 0 0-8.2 14.3L2.5 21.5l5.3-1.4A9.5 9.5 0 1 0 12 2Zm0 17.2c-1.5 0-3-.4-4.2-1.2l-.3-.2-3.1.8.8-3-.2-.3A7.7 7.7 0 1 1 12 19.2Zm4.2-5.8c-.2-.1-1.4-.7-1.6-.8-.2-.1-.4-.1-.6.1l-.8 1c-.2.2-.3.2-.6.1a6.4 6.4 0 0 1-3.1-2.7c-.2-.3 0-.5.1-.6l.5-.6c.2-.2.2-.4.3-.6 0-.2 0-.4-.1-.6l-.7-1.7c-.2-.5-.4-.5-.6-.5h-.5c-.2 0-.5.1-.7.3-.3.3-1 1-1 2.4s1 2.8 1.2 3c.1.2 2 3.2 5 4.4 3 .9 3 .6 3.6.6.5 0 1.7-.7 1.9-1.3.2-.7.2-1.2.2-1.3-.1-.1-.3-.2-.5-.3Z"/>
 </svg>
 </div>
-<div><strong>WHATSAPP</strong><span>0821 1712 6895</span></div>
+<div><strong>WHATSAPP</strong><span>{{ identity['whatsapp'] or identity['telepon'] or '-' }}</span></div>
 </div>
 
 <div class="footer-item">
@@ -58,7 +58,7 @@
 <path fill="white" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm6.9 6h-3a15.8 15.8 0 0 0-1.4-3.1A8.1 8.1 0 0 1 18.9 8ZM12 4c.9 1.1 1.6 2.4 2 4h-4c.4-1.6 1.1-2.9 2-4ZM9.5 4.9A15.8 15.8 0 0 0 8.1 8h-3a8.1 8.1 0 0 1 4.4-3.1ZM4.3 10h3.4a16.6 16.6 0 0 0 0 4H4.3a8 8 0 0 1 0-4Zm.8 6h3a15.8 15.8 0 0 0 1.4 3.1A8.1 8.1 0 0 1 5.1 16Zm6.9 4c-.9-1.1-1.6-2.4-2-4h4c-.4 1.6-1.1 2.9-2 4Zm2.4-6H9.6a14.2 14.2 0 0 1 0-4h4.8a14.2 14.2 0 0 1 0 4Zm.1 5.1a15.8 15.8 0 0 0 1.4-3.1h3a8.1 8.1 0 0 1-4.4 3.1Zm1.8-5.1a16.6 16.6 0 0 0 0-4h3.4a8 8 0 0 1 0 4h-3.4Z"/>
 </svg>
 </div>
-<div><strong>WEBSITE</strong><span>distributordalton.com</span></div>
+<div><strong>WEBSITE</strong><span>{{ identity['website'] or '-' }}</span></div>
 </div>
 
 <div class="footer-item">
@@ -67,7 +67,7 @@
 <path fill="white" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5Z"/>
 </svg>
 </div>
-<div><strong>ALAMAT</strong><span>Kawasan Industri De Primaterra<br>Jl. Raya Sapan Blok E2/11<br>Bandung, Jawa Barat</span></div>
+<div><strong>ALAMAT</strong><span>{{ identity['alamat'] or '-' }}{% if identity['kota'] %}<br>{{ identity['kota'] }}{% if identity['provinsi'] %}, {{ identity['provinsi'] }}{% endif %}{% endif %}</span></div>
 </div>
 </footer>
 </main>

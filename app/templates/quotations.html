@@ -14,6 +14,7 @@ h1{margin:0;color:#0b4388}.sub{color:#6c7882;margin-top:5px}.buttons,.quick{disp
 th,td{padding:12px;border-bottom:1px solid #e1e8ed;font-size:12px;text-align:left}th{background:#0b4388;color:#fff;font-size:11px}
 .money{text-align:right;white-space:nowrap}.number{font-weight:800;color:#0b4388}.badge{display:inline-block;padding:6px 10px;border-radius:999px;font-size:11px;font-weight:800}
 .draft{background:#e8eef5;color:#41576d}.terkirim{background:#dcecff;color:#0b5cab}.negosiasi{background:#fff0cc;color:#9a6500}.revisi{background:#eee2ff;color:#6d32a8}.deal{background:#dcf5e6;color:#087a37}.expired{background:#ffe0e0;color:#b02121}.batal{background:#343a40;color:#fff}
+.identity-full{background:#dcecff;color:#0b5cab}.identity-quotation-only{background:#fff0cc;color:#8b5b00}
 .empty{text-align:center;padding:30px;color:#6c7882}.inline{display:inline}
 @media(max-width:1000px){.card{overflow:auto}table{min-width:1100px}.head{align-items:flex-start;flex-direction:column}}
 </style>
@@ -21,7 +22,7 @@ th,td{padding:12px;border-bottom:1px solid #e1e8ed;font-size:12px;text-align:lef
 <body>
 <main class="container">
 <div class="head">
-<div><h1>Quotation / Penawaran</h1><div class="sub">Quotation v1.0 Final — workflow penawaran Ahsa Equipment.</div></div>
+<div><h1>Quotation / Penawaran</h1><div class="sub">Kelola penawaran Ahsa dan Denko dalam satu workflow ERP.</div></div>
 <div class="buttons">
 <a class="btn light" href="{{ url_for('dashboard') }}">Dashboard</a>
 <a class="btn primary" href="{{ url_for('add_quotation') }}">+ Buat Penawaran</a>
@@ -30,11 +31,12 @@ th,td{padding:12px;border-bottom:1px solid #e1e8ed;font-size:12px;text-align:lef
 <section class="card">
 {% if quotations %}
 <table>
-<thead><tr><th>No. Penawaran</th><th>Tanggal</th><th>Customer</th><th>Instansi</th><th>Status</th><th class="money">Grand Total</th><th>Aksi Cepat</th></tr></thead>
+<thead><tr><th>No. Penawaran</th><th>Identity</th><th>Tanggal</th><th>Customer</th><th>Instansi</th><th>Status</th><th class="money">Grand Total</th><th>Aksi Cepat</th></tr></thead>
 <tbody>
 {% for quotation in quotations %}
 <tr>
 <td class="number">{{ quotation["nomor_penawaran"] }}</td>
+<td><span class="badge identity-{{ (quotation['identity_type'] or 'FULL')|lower|replace('_', '-') }}">{{ quotation["identity_name"] or "Identity Utama" }}</span></td>
 <td>{{ format_tanggal_indonesia(quotation["tanggal"]) }}</td>
 <td>{{ quotation["customer_nama"] or "-" }}</td>
 <td>{{ quotation["customer_instansi"] or "-" }}</td>

@@ -556,8 +556,8 @@
             <div class="logo-window">
                 <img
                     class="brand-logo"
-                    src="{{ url_for('static', filename='images/logo-ahsa.png') }}"
-                    alt="Ahsa Equipment"
+                    src="{{ url_for('static', filename=identity['logo_path']) }}"
+                    alt="{{ identity['nama_brand'] }}"
                 >
             </div>
 
@@ -626,22 +626,22 @@
                 <div class="payment-grid">
                     <div>Bank</div>
                     <div>:</div>
-                    <div class="value">BCA</div>
+                    <div class="value">{{ identity['bank'] or '-' }}</div>
 
                     <div>No. Rek.</div>
                     <div>:</div>
-                    <div class="value">1483353085</div>
+                    <div class="value">{{ identity['no_rekening'] or '-' }}</div>
 
                     <div>a.n.</div>
                     <div>:</div>
                     <div class="value">
-                        PT Ahsa Cahaya Persada
+                        {{ identity['atas_nama'] or identity['nama_perusahaan'] }}
                     </div>
 
                     <div>Website</div>
                     <div>:</div>
                     <div class="value">
-                        distributordalton.com
+                        {{ identity['website'] or '-' }}
                     </div>
                 </div>
             </div>
@@ -835,20 +835,20 @@
                                 class="signature-logo"
                                 src="{{ url_for(
                                     'static',
-                                    filename='images/logo-ahsa.png'
+                                    filename=identity['signature_path'] or identity['logo_path']
                                 ) }}"
-                                alt="Ahsa Equipment"
+                                alt="{{ identity['nama_brand'] }}"
                             >
                         </div>
 
                         <div class="signature-space"></div>
 
                         <div class="signature-name">
-                            AHSA EQUIPMENT
+                            {{ identity['signature_name'] or identity['nama_brand'] }}
                         </div>
 
                         <div class="signature-company">
-                            PT Ahsa Cahaya Persada
+                            {{ identity['nama_perusahaan'] }}
                         </div>
                     </div>
                 </div>
@@ -865,7 +865,7 @@
 
                 <span class="footer-text">
                     <strong>WhatsApp</strong>
-                    <span class="footer-value">0821 1712 6895</span>
+                    <span class="footer-value">{{ identity['whatsapp'] or identity['telepon'] or '-' }}</span>
                 </span>
             </div>
 
@@ -878,7 +878,7 @@
 
                 <span class="footer-text">
                     <strong>Website</strong>
-                    <span class="footer-value">distributordalton.com</span>
+                    <span class="footer-value">{{ identity['website'] or '-' }}</span>
                 </span>
             </div>
 
@@ -892,7 +892,7 @@
                 <span class="footer-text">
                     <strong>Alamat</strong>
                     <span class="footer-value">
-                        Kawasan Industri De Primaterra, Jl. Raya Sapan Blok E2/11, Bandung, Jawa Barat
+                        {{ identity['alamat'] or '-' }}{% if identity['kota'] %}, {{ identity['kota'] }}{% endif %}{% if identity['provinsi'] %}, {{ identity['provinsi'] }}{% endif %}
                     </span>
                 </span>
             </div>
