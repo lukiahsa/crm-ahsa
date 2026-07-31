@@ -1432,6 +1432,247 @@ def create_tables():
     )
 
     # ==========================================================
+    # SPRINT 6 — COMPANY IDENTITIES
+    # company_identities adalah single source of truth.
+    # company_profile dipertahankan sebagai compatibility layer
+    # untuk instalasi lama dan tidak lagi dibaca oleh aplikasi.
+    # ==========================================================
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS company_identities (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            code TEXT NOT NULL UNIQUE,
+            identity_type TEXT NOT NULL
+                CHECK (identity_type IN ('FULL', 'QUOTATION_ONLY')),
+            is_default INTEGER NOT NULL DEFAULT 0
+                CHECK (is_default IN (0, 1)),
+
+            nama_perusahaan TEXT NOT NULL,
+            nama_brand TEXT NOT NULL,
+            alamat TEXT,
+            kota TEXT,
+            provinsi TEXT,
+            kode_pos TEXT,
+            telepon TEXT,
+            whatsapp TEXT,
+            email TEXT,
+            website TEXT,
+            npwp TEXT,
+
+            bank TEXT,
+            no_rekening TEXT,
+            atas_nama TEXT,
+
+            logo_path TEXT NOT NULL,
+            signature_path TEXT,
+            signature_name TEXT,
+
+            footer_invoice TEXT,
+            footer_quotation TEXT,
+            footer_purchase_order TEXT,
+            footer_delivery_order TEXT,
+            footer_receipt TEXT,
+
+            allow_qr INTEGER NOT NULL DEFAULT 0
+                CHECK (allow_qr IN (0, 1)),
+            allow_signature INTEGER NOT NULL DEFAULT 0
+                CHECK (allow_signature IN (0, 1)),
+            allow_website_footer INTEGER NOT NULL DEFAULT 0
+                CHECK (allow_website_footer IN (0, 1)),
+            allow_transaction_conversion INTEGER NOT NULL DEFAULT 0
+                CHECK (allow_transaction_conversion IN (0, 1)),
+            active INTEGER NOT NULL DEFAULT 1
+                CHECK (active IN (0, 1)),
+
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+
+    company_identity_columns = {
+        "code": "TEXT",
+        "identity_type": "TEXT NOT NULL DEFAULT 'QUOTATION_ONLY'",
+        "is_default": "INTEGER NOT NULL DEFAULT 0",
+        "nama_perusahaan": "TEXT",
+        "nama_brand": "TEXT",
+        "alamat": "TEXT",
+        "kota": "TEXT",
+        "provinsi": "TEXT",
+        "kode_pos": "TEXT",
+        "telepon": "TEXT",
+        "whatsapp": "TEXT",
+        "email": "TEXT",
+        "website": "TEXT",
+        "npwp": "TEXT",
+        "bank": "TEXT",
+        "no_rekening": "TEXT",
+        "atas_nama": "TEXT",
+        "logo_path": "TEXT",
+        "signature_path": "TEXT",
+        "signature_name": "TEXT",
+        "footer_invoice": "TEXT",
+        "footer_quotation": "TEXT",
+        "footer_purchase_order": "TEXT",
+        "footer_delivery_order": "TEXT",
+        "footer_receipt": "TEXT",
+        "allow_qr": "INTEGER NOT NULL DEFAULT 0",
+        "allow_signature": "INTEGER NOT NULL DEFAULT 0",
+        "allow_website_footer": "INTEGER NOT NULL DEFAULT 0",
+        "allow_transaction_conversion": "INTEGER NOT NULL DEFAULT 0",
+        "active": "INTEGER NOT NULL DEFAULT 1",
+        "created_at": "TIMESTAMP",
+        "updated_at": "TIMESTAMP",
+    }
+
+    for column_name, column_definition in company_identity_columns.items():
+        ensure_column(
+            conn,
+            "company_identities",
+            column_name,
+            column_definition,
+        )
+
+    cursor.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS
+            idx_company_identities_single_default
+        ON company_identities (is_default)
+        WHERE is_default = 1
+        """
+    )
+
+    cursor.execute(
+        """
+        INSERT OR IGNORE INTO company_identities (
+            code,
+            identity_type,
+            is_default,
+            nama_perusahaan,
+            nama_brand,
+            alamat,
+            kota,
+            provinsi,
+            kode_pos,
+            telepon,
+            whatsapp,
+            email,
+            website,
+            npwp,
+            bank,
+            no_rekening,
+            atas_nama,
+            logo_path,
+            signature_path,
+            signature_name,
+            footer_invoice,
+            footer_quotation,
+            footer_purchase_order,
+            footer_delivery_order,
+            footer_receipt,
+            allow_qr,
+            allow_signature,
+            allow_website_footer,
+            allow_transaction_conversion,
+            active
+        )
+        SELECT
+            'AHSA',
+            'FULL',
+            1,
+            COALESCE(NULLIF(TRIM(nama_perusahaan), ''),
+                     'PT Ahsa Cahaya Persada'),
+            COALESCE(NULLIF(TRIM(nama_brand), ''), 'Ahsa Equipment'),
+            alamat,
+            kota,
+            provinsi,
+            kode_pos,
+            telepon,
+            whatsapp,
+            email,
+            COALESCE(NULLIF(TRIM(website), ''),
+                     'distributordalton.com'),
+            npwp,
+            COALESCE(NULLIF(TRIM(bank), ''), 'BCA'),
+            COALESCE(NULLIF(TRIM(no_rekening), ''), '1483353085'),
+            COALESCE(NULLIF(TRIM(atas_nama), ''),
+                     'PT Ahsa Cahaya Persada'),
+            'images/logo-ahsa.png',
+            'images/logo-ahsa.png',
+            'Luki Lukmanul Hakim',
+            footer_invoice,
+            footer_quotation,
+            footer_purchase_order,
+            footer_delivery_order,
+            footer_receipt,
+            1,
+            1,
+            1,
+            1,
+            1
+        FROM company_profile
+        WHERE id = 1
+        """
+    )
+
+    cursor.execute(
+        """
+        INSERT OR IGNORE INTO company_identities (
+            code,
+            identity_type,
+            is_default,
+            nama_perusahaan,
+            nama_brand,
+            alamat,
+            kota,
+            provinsi,
+            telepon,
+            whatsapp,
+            email,
+            website,
+            bank,
+            no_rekening,
+            atas_nama,
+            logo_path,
+            signature_path,
+            signature_name,
+            footer_quotation,
+            allow_qr,
+            allow_signature,
+            allow_website_footer,
+            allow_transaction_conversion,
+            active
+        )
+        VALUES (
+            'DENKO',
+            'QUOTATION_ONLY',
+            0,
+            'PT Denko Wahana Sakti',
+            'Denko',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            'PT Denko Wahana Sakti',
+            'images/denko_logo.png',
+            NULL,
+            NULL,
+            'PT Denko Wahana Sakti',
+            0,
+            0,
+            0,
+            0,
+            1
+        )
+        """
+    )
+
+    # ==========================================================
     # SPRINT 10.0 — DOCUMENT NUMBERING ENGINE
     # ==========================================================
     cursor.execute(
@@ -2078,6 +2319,7 @@ def create_tables():
             show_footer INTEGER NOT NULL DEFAULT 1,
             auto_hide_zero INTEGER NOT NULL DEFAULT 1,
 
+            identity_id INTEGER,
             converted_transaction_id INTEGER,
 
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -2089,7 +2331,12 @@ def create_tables():
 
             FOREIGN KEY (converted_transaction_id)
                 REFERENCES sales_transactions (id)
-                ON DELETE SET NULL
+                ON DELETE SET NULL,
+
+            FOREIGN KEY (identity_id)
+                REFERENCES company_identities (id)
+                ON UPDATE RESTRICT
+                ON DELETE RESTRICT
         )
         """
     )
@@ -2188,11 +2435,83 @@ def create_tables():
     ensure_column(
         conn,
         "sales_quotations",
+        "identity_id",
+        (
+            "INTEGER REFERENCES company_identities(id) "
+            "ON UPDATE RESTRICT ON DELETE RESTRICT"
+        ),
+    )
+    ensure_column(
+        conn,
+        "sales_quotations",
         "converted_transaction_id",
         "INTEGER",
     )
     ensure_column(conn, "sales_quotations", "created_at", "TIMESTAMP")
     ensure_column(conn, "sales_quotations", "updated_at", "TIMESTAMP")
+
+    cursor.execute(
+        """
+        UPDATE sales_quotations
+        SET identity_id = (
+            SELECT id
+            FROM company_identities
+            WHERE identity_type = 'FULL'
+              AND is_default = 1
+            LIMIT 1
+        )
+        WHERE identity_id IS NULL
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_sales_quotations_identity_id
+        ON sales_quotations (identity_id)
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS
+            trg_sales_quotations_identity_insert
+        AFTER INSERT ON sales_quotations
+        FOR EACH ROW
+        WHEN NEW.identity_id IS NULL
+        BEGIN
+            UPDATE sales_quotations
+            SET identity_id = (
+                SELECT id
+                FROM company_identities
+                WHERE identity_type = 'FULL'
+                  AND is_default = 1
+                LIMIT 1
+            )
+            WHERE id = NEW.id;
+        END
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS
+            trg_sales_quotations_identity_update
+        AFTER UPDATE OF identity_id ON sales_quotations
+        FOR EACH ROW
+        WHEN NEW.identity_id IS NULL
+        BEGIN
+            UPDATE sales_quotations
+            SET identity_id = (
+                SELECT id
+                FROM company_identities
+                WHERE identity_type = 'FULL'
+                  AND is_default = 1
+                LIMIT 1
+            )
+            WHERE id = NEW.id;
+        END
+        """
+    )
 
     cursor.execute(
         """
