@@ -1466,6 +1466,8 @@ def create_tables():
             logo_path TEXT NOT NULL,
             signature_path TEXT,
             signature_name TEXT,
+            signature_title TEXT,
+            signature_email TEXT,
 
             footer_invoice TEXT,
             footer_quotation TEXT,
@@ -1511,6 +1513,8 @@ def create_tables():
         "logo_path": "TEXT",
         "signature_path": "TEXT",
         "signature_name": "TEXT",
+        "signature_title": "TEXT",
+        "signature_email": "TEXT",
         "footer_invoice": "TEXT",
         "footer_quotation": "TEXT",
         "footer_purchase_order": "TEXT",
@@ -1626,6 +1630,7 @@ def create_tables():
             alamat,
             kota,
             provinsi,
+            kode_pos,
             telepon,
             whatsapp,
             email,
@@ -1636,6 +1641,8 @@ def create_tables():
             logo_path,
             signature_path,
             signature_name,
+            signature_title,
+            signature_email,
             footer_quotation,
             allow_qr,
             allow_signature,
@@ -1649,27 +1656,80 @@ def create_tables():
             0,
             'PT Denko Wahana Sakti',
             'Denko',
+            'Kantor Cabang Bandung\nKawasan Industri De Prima Terra Blok E2/11\nJl. Raya Sapan\nBojongsoang',
+            'Kabupaten Bandung',
+            'Jawa Barat',
+            '40288',
             '',
-            '',
-            '',
-            '',
-            '',
-            '',
-            '',
-            '',
-            '',
+            '082117126895',
+            'luki@denko.co.id',
+            'https://www.handliftbandung.com',
+            'BCA Cab. Metro Trade Center',
+            '6395758989',
             'PT Denko Wahana Sakti',
             'images/denko_logo.png',
-            NULL,
-            NULL,
+            'images/signature_denko.png',
+            'Luki Lukmanul Hakim',
+            'Sales Executive',
+            'luki@denko.co.id',
             'PT Denko Wahana Sakti',
             0,
-            0,
+            1,
             0,
             0,
             1
         )
         """
+    )
+
+    # Lengkapi seed stub Denko dari Sprint 6 awal satu kali. Kondisi ini
+    # menjaga profile resmi yang sudah pernah disunting agar tidak ditimpa
+    # kembali pada setiap startup aplikasi.
+    cursor.execute(
+        """
+        UPDATE company_identities
+        SET alamat = ?,
+            kota = ?,
+            provinsi = ?,
+            kode_pos = ?,
+            whatsapp = ?,
+            email = ?,
+            website = ?,
+            bank = ?,
+            no_rekening = ?,
+            atas_nama = ?,
+            signature_path = ?,
+            signature_name = ?,
+            signature_title = ?,
+            signature_email = ?,
+            allow_qr = 0,
+            allow_signature = 1,
+            allow_website_footer = 0,
+            allow_transaction_conversion = 0,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE code = 'DENKO'
+          AND COALESCE(TRIM(website), '') = ''
+          AND COALESCE(TRIM(signature_path), '') = ''
+        """,
+        (
+            "Kantor Cabang Bandung\n"
+            "Kawasan Industri De Prima Terra Blok E2/11\n"
+            "Jl. Raya Sapan\n"
+            "Bojongsoang",
+            "Kabupaten Bandung",
+            "Jawa Barat",
+            "40288",
+            "082117126895",
+            "luki@denko.co.id",
+            "https://www.handliftbandung.com",
+            "BCA Cab. Metro Trade Center",
+            "6395758989",
+            "PT Denko Wahana Sakti",
+            "images/signature_denko.png",
+            "Luki Lukmanul Hakim",
+            "Sales Executive",
+            "luki@denko.co.id",
+        ),
     )
 
     # ==========================================================

@@ -5,8 +5,8 @@
 - Repository: `lukiahsa/crm-ahsa`
 - Baseline: `85e6e0e` (`Initial CRM Ahsa baseline`)
 - Branch implementasi: `agent/sprint-6-multi-identity`
-- Status regression: **10/10 lulus**
-- Status working tree saat laporan dibuat: bersih setelah commit dokumentasi
+- Status regression: **11/11 lulus**
+- Status implementasi: profil resmi dan signature Denko telah difinalisasi
 - Perubahan pada `main`: tidak ada
 
 ## 1. Ringkasan Perubahan
@@ -27,6 +27,10 @@ Aturan bisnis yang diterapkan:
 - Quotation Ahsa dan Denko menggunakan satu template `quotation_print.html`.
 - Identity `QUOTATION_ONLY` selalu menonaktifkan seluruh footer pada server,
   meskipun preference quotation atau request mengirim `show_footer=1`.
+- Profil Denko pada header quotation selalu memuat alamat kantor cabang,
+  rekening, website, email, dan WhatsApp.
+- Denko menggunakan signature milik Denko, tanpa QR, logo Ahsa, signature
+  Ahsa, website Ahsa, maupun seluruh elemen footer.
 
 ## 2. Struktur Database Baru
 
@@ -38,7 +42,7 @@ Aturan bisnis yang diterapkan:
 | Profil | `nama_perusahaan`, `nama_brand`, `alamat`, `kota`, `provinsi`, `kode_pos` |
 | Kontak | `telepon`, `whatsapp`, `email`, `website`, `npwp` |
 | Rekening | `bank`, `no_rekening`, `atas_nama` |
-| Asset | `logo_path`, `signature_path`, `signature_name` |
+| Asset | `logo_path`, `signature_path`, `signature_name`, `signature_title`, `signature_email` |
 | Footer | `footer_invoice`, `footer_quotation`, `footer_purchase_order`, `footer_delivery_order`, `footer_receipt` |
 | Capability | `allow_qr`, `allow_signature`, `allow_website_footer`, `allow_transaction_conversion` |
 | Lifecycle | `active`, `created_at`, `updated_at` |
@@ -77,7 +81,22 @@ Tidak ada kolom identity pada transaction, invoice, delivery order, receipt, ata
 | `AHSA` | `FULL` | Ya | `images/logo-ahsa.png` | Diizinkan |
 | `DENKO` | `QUOTATION_ONLY` | Tidak | `images/denko_logo.png` | Ditolak |
 
-Data resmi Denko belum diisi. Seed hanya menyediakan nama perusahaan, nama brand, logo, type, dan capability yang aman. Profil dapat dilengkapi kemudian tanpa mengubah schema.
+Seed resmi Denko:
+
+| Field | Nilai |
+|---|---|
+| Nama | `PT Denko Wahana Sakti` |
+| Alamat | Kantor Cabang Bandung, Kawasan Industri De Prima Terra Blok E2/11, Jl. Raya Sapan, Bojongsoang, Kabupaten Bandung, Jawa Barat 40288 |
+| Website | `https://www.handliftbandung.com` |
+| Email | `luki@denko.co.id` |
+| WhatsApp | `082117126895` |
+| Bank | `BCA Cab. Metro Trade Center` |
+| Rekening | `6395758989` a.n. `PT Denko Wahana Sakti` |
+| Signature | `images/signature_denko.png` — Luki Lukmanul Hakim, Sales Executive |
+
+Migration mengisi row Denko lama yang masih berupa stub. Kondisi migration
+bersifat idempotent dan tidak menimpa profil Denko yang sudah lengkap pada
+startup berikutnya.
 
 ## 3. Route yang Berubah
 
@@ -132,10 +151,17 @@ Untuk Denko, server memastikan:
 
 - `denko_logo.png` digunakan.
 - QR tidak dibuat.
-- Website tidak dirender.
-- Signature Ahsa tidak dirender.
+- `www.handliftbandung.com`, email, WhatsApp, alamat, dan rekening Denko
+  dirender pada blok identitas di bagian atas dokumen.
+- `signature_denko.png` dirender bersama nama, jabatan, dan email Denko.
+- Signature dan logo Ahsa tidak dirender.
 - Logo/nama Ahsa tidak dirender.
 - Seluruh elemen `<footer>` tidak dirender.
+
+Asset baru:
+
+- `app/static/images/signature_denko.png`: PNG RGBA transparan, tinta biru
+  tua, dibuat khusus untuk signature Luki Lukmanul Hakim.
 
 ## 5. Screenshot Alur Identity
 
@@ -169,7 +195,10 @@ Screenshot dirender dari response HTML aktual Flask menggunakan database QA seme
 - [x] Duplicate quotation mempertahankan identity.
 - [x] Identity quotation terkunci setelah conversion.
 - [x] Manipulasi capability melalui settings POST diabaikan.
-- [x] QR/signature Denko tetap nonaktif meskipun request dimanipulasi.
+- [x] QR Denko tetap nonaktif meskipun request dimanipulasi.
+- [x] Signature resmi Denko muncul tanpa signature atau logo Ahsa.
+- [x] Website `handliftbandung.com`, alamat, rekening, email, dan WA Denko
+  muncul pada header identity.
 - [x] Footer Denko tetap tidak dirender meskipun request dan data legacy
   memiliki `show_footer=1`.
 - [x] Footer Ahsa tetap mengikuti preference quotation.
@@ -193,7 +222,7 @@ python -m unittest discover -s tests -p 'test_*.py' -v
 Hasil:
 
 ```text
-Ran 10 tests
+Ran 11 tests
 OK
 ```
 
@@ -204,14 +233,18 @@ Skenario otomatis:
 1. Ahsa quotation berhasil dikonversi.
 2. Denko quotation ditolak server.
 3. Ahsa PDF berisi logo, website, QR, dan signature Ahsa.
-4. Denko PDF berisi logo Denko tanpa QR, website, atau signature Ahsa.
+4. Denko PDF berisi logo, profil resmi, rekening, website, dan signature
+   Denko; tanpa QR, logo Ahsa, atau signature Ahsa.
 5. Invoice selalu identity FULL.
 6. Delivery Order selalu identity FULL.
 7. Receipt selalu identity FULL.
 8. Purchase Order dan transaction print selalu identity FULL.
 9. Manipulasi `show_footer=1` pada Denko tetap tidak merender elemen
-   `<footer>`, website, QR, atau signature Ahsa; footer Ahsa tetap tampil.
-10. Migration legacy, duplicate, lock identity, capability tampering, dan Jinja compilation.
+   `<footer>`, website Ahsa, QR, logo Ahsa, atau signature Ahsa; profil dan
+   signature resmi Denko tetap tampil serta footer Ahsa tetap tampil.
+10. Row seed Denko lama yang masih stub dimigrasikan secara idempotent ke
+    profil resmi.
+11. Migration legacy, duplicate, lock identity, capability tampering, dan Jinja compilation.
 
 ## 8. Commit yang Dibuat
 
@@ -224,6 +257,7 @@ Skenario otomatis:
 | `5977c3c` | `fix(identity): polish identity document layouts` |
 | Dokumentasi | `docs(sprint-6): add implementation report` |
 | Revisi wajib | `fix(identity): suppress all footer content for Denko quotations` |
+| Finalisasi profil Denko | `fix(identity): finalize official Denko identity profile` |
 
 ## 9. Langkah Merge dan Deployment
 
@@ -257,10 +291,13 @@ git push origin main
 3. Buat satu quotation Ahsa dan lakukan conversion.
 4. Buat satu quotation Denko dan pastikan conversion mendapat HTTP 400.
 5. Periksa visual Invoice, DO, Receipt, dan PO tetap Ahsa.
-6. Lengkapi data resmi Denko pada Company Identities setelah data disetujui.
+6. Pastikan header Denko menampilkan profil resmi dan signature Denko tanpa
+   QR maupun elemen `<footer>`.
 
 ## Risiko Tersisa
 
 - Profil identity belum menggunakan versioning/snapshot. Perubahan profil dapat memengaruhi hasil reprint dokumen lama.
-- Data resmi rekening, alamat, dan email Denko masih kosong sesuai keputusan Sprint 6.
+- Profil identity belum memiliki histori perubahan terpisah. Karena migration
+  profil Denko hanya mengisi row stub, perubahan manual berikutnya tidak
+  ditimpa saat startup.
 - Repository baseline masih belum memiliki authentication, authorization, dan CSRF protection. Hal tersebut tetap menjadi blocker deployment publik dan harus ditangani pada sprint keamanan terpisah.

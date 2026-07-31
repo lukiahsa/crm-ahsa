@@ -167,9 +167,39 @@ class MultiIdentityRegressionTest(unittest.TestCase):
         self.assertEqual(identities[1]["identity_type"], "QUOTATION_ONLY")
         self.assertEqual(identities[1]["logo_path"], "images/denko_logo.png")
         self.assertEqual(identities[1]["allow_qr"], 0)
-        self.assertEqual(identities[1]["allow_signature"], 0)
+        self.assertEqual(identities[1]["allow_signature"], 1)
         self.assertEqual(identities[1]["allow_website_footer"], 0)
         self.assertEqual(identities[1]["allow_transaction_conversion"], 0)
+        self.assertEqual(
+            identities[1]["website"],
+            "https://www.handliftbandung.com",
+        )
+        self.assertEqual(identities[1]["email"], "luki@denko.co.id")
+        self.assertEqual(identities[1]["whatsapp"], "082117126895")
+        self.assertEqual(
+            identities[1]["bank"],
+            "BCA Cab. Metro Trade Center",
+        )
+        self.assertEqual(identities[1]["no_rekening"], "6395758989")
+        self.assertEqual(
+            identities[1]["signature_path"],
+            "images/signature_denko.png",
+        )
+        self.assertEqual(
+            identities[1]["signature_name"],
+            "Luki Lukmanul Hakim",
+        )
+        self.assertEqual(
+            identities[1]["signature_title"],
+            "Sales Executive",
+        )
+        self.assertEqual(
+            identities[1]["signature_email"],
+            "luki@denko.co.id",
+        )
+        self.assertTrue(
+            (APP_DIR / "static/images/signature_denko.png").is_file()
+        )
 
         legacy_id = conn.execute(
             """
@@ -269,6 +299,59 @@ class MultiIdentityRegressionTest(unittest.TestCase):
             finally:
                 database.DATABASE = current_database
 
+    def test_existing_denko_stub_is_migrated_to_official_profile(self):
+        conn = database.get_connection()
+        conn.execute(
+            """
+            UPDATE company_identities
+            SET alamat = '',
+                kota = '',
+                provinsi = '',
+                kode_pos = '',
+                whatsapp = '',
+                email = '',
+                website = '',
+                bank = '',
+                no_rekening = '',
+                signature_path = NULL,
+                signature_name = NULL,
+                signature_title = NULL,
+                signature_email = NULL,
+                allow_signature = 0
+            WHERE code = 'DENKO'
+            """
+        )
+        conn.commit()
+        conn.close()
+
+        database.create_tables()
+        database.create_tables()
+
+        conn = database.get_connection()
+        denko = conn.execute(
+            """
+            SELECT *
+            FROM company_identities
+            WHERE code = 'DENKO'
+            """
+        ).fetchone()
+        conn.close()
+
+        self.assertEqual(
+            denko["website"],
+            "https://www.handliftbandung.com",
+        )
+        self.assertEqual(denko["no_rekening"], "6395758989")
+        self.assertEqual(
+            denko["signature_path"],
+            "images/signature_denko.png",
+        )
+        self.assertEqual(denko["signature_title"], "Sales Executive")
+        self.assertEqual(denko["allow_signature"], 1)
+        self.assertEqual(denko["allow_qr"], 0)
+        self.assertEqual(denko["allow_website_footer"], 0)
+        self.assertEqual(denko["allow_transaction_conversion"], 0)
+
     def test_ahsa_quotation_converts_to_transaction(self):
         quotation_id, transaction_id = self.convert_ahsa_quotation()
         conn = database.get_connection()
@@ -332,10 +415,19 @@ class MultiIdentityRegressionTest(unittest.TestCase):
 
         self.assertIn("images/denko_logo.png", denko_html)
         self.assertIn("PT Denko Wahana Sakti", denko_html)
+        self.assertIn("Kantor Cabang Bandung", denko_html)
+        self.assertIn("BCA Cab. Metro Trade Center", denko_html)
+        self.assertIn("6395758989", denko_html)
+        self.assertIn("www.handliftbandung.com", denko_html)
+        self.assertIn("images/signature_denko.png", denko_html)
+        self.assertIn("Luki Lukmanul Hakim", denko_html)
+        self.assertIn("Sales Executive", denko_html)
+        self.assertIn("luki@denko.co.id", denko_html)
         self.assertNotIn("images/logo-ahsa.png", denko_html)
         self.assertNotIn("distributordalton.com", denko_html)
         self.assertNotIn("data:image/png;base64", denko_html)
-        self.assertNotIn("Luki Lukmanul Hakim", denko_html)
+        self.assertNotIn("PT Ahsa Cahaya Persada", denko_html)
+        self.assertNotIn("<footer", denko_html)
 
     def test_denko_footer_is_suppressed_server_side(self):
         denko_id = self.create_quotation(
@@ -362,7 +454,7 @@ class MultiIdentityRegressionTest(unittest.TestCase):
         ).fetchone()
         self.assertEqual(persisted["show_footer"], 0)
         self.assertEqual(persisted["show_qr"], 0)
-        self.assertEqual(persisted["show_signature"], 0)
+        self.assertEqual(persisted["show_signature"], 1)
 
         conn.execute(
             """
@@ -398,7 +490,11 @@ class MultiIdentityRegressionTest(unittest.TestCase):
         self.assertNotIn("<footer", denko_html)
         self.assertNotIn("distributordalton.com", denko_html)
         self.assertNotIn("data:image/png;base64", denko_html)
-        self.assertNotIn("Luki Lukmanul Hakim", denko_html)
+        self.assertIn("www.handliftbandung.com", denko_html)
+        self.assertIn("images/signature_denko.png", denko_html)
+        self.assertIn("Luki Lukmanul Hakim", denko_html)
+        self.assertNotIn("images/logo-ahsa.png", denko_html)
+        self.assertNotIn("PT Ahsa Cahaya Persada", denko_html)
         self.assertIn('<footer class="footer', ahsa_html)
         self.assertIn("distributordalton.com", ahsa_html)
 
