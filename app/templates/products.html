@@ -132,6 +132,10 @@
                     Dashboard
                 </a>
 
+                <a href="{{ url_for('import_products') }}" class="btn btn-secondary">
+                    Import XLSX
+                </a>
+
                 <a href="{{ url_for('add_product') }}" class="btn btn-primary">
                     + Tambah Produk
                 </a>
@@ -145,9 +149,12 @@
                         <th>Kode</th>
                         <th>Nama Produk</th>
                         <th>Kategori</th>
+                        <th>Brand</th>
+                        <th>Subkategori / Jenis</th>
                         <th>Varian</th>
                         <th>Warna</th>
                         <th>Ukuran</th>
+                        <th>Steps</th>
                         <th>Satuan</th>
                         <th class="harga">Harga Jual</th>
                         <th class="harga">Harga Modal</th>
@@ -161,10 +168,13 @@
                         <tr>
                             <td>{{ product["kode_produk"] or "-" }}</td>
                             <td>{{ product["nama_produk"] }}</td>
-                            <td>{{ product["kategori"] or "-" }}</td>
-                            <td>{{ product["varian"] or "-" }}</td>
-                            <td>{{ product["warna"] or "-" }}</td>
-                            <td>{{ product["ukuran"] or "-" }}</td>
+                            <td>{{ product["kategori_nama"] or "-" }}</td>
+                            <td>{{ product["brand_nama"] or "-" }}</td>
+                            <td>{{ product["subkategori"] or product["jenis_produk"] or "-" }}</td>
+                            <td>{{ product["varian_nama"] or "-" }}</td>
+                            <td>{{ product["warna_nama"] or "-" }}</td>
+                            <td>{{ product["ukuran_nama"] or "-" }}</td>
+                            <td>{{ product["steps"] or "-" }}</td>
                             <td>{{ product["satuan"] }}</td>
 
                             <td class="harga">
@@ -186,7 +196,7 @@
                         {% endfor %}
                     {% else %}
                         <tr>
-                            <td colspan="10" class="empty">
+                            <td colspan="13" class="empty">
                                 Belum ada produk di Master Produk.
                             </td>
                         </tr>

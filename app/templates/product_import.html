@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Import Master Produk</title>
+    <style>
+        :root {
+            --primary: #0b4388;
+            --success: #198754;
+            --warning: #a15c00;
+            --danger: #b42318;
+            --muted: #667085;
+            --border: #d9e0e8;
+            --surface: #fff;
+            --background: #f4f7fa;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            color: #17202a;
+            background: var(--background);
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            width: min(96%, 1520px);
+            margin: 28px auto 50px;
+        }
+        .page-header, .actions, .summary-grid {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .page-header {
+            justify-content: space-between;
+            margin-bottom: 18px;
+        }
+        h1, h2 { margin: 0; }
+        .subtitle { color: var(--muted); margin: 7px 0 0; }
+        .card {
+            margin-bottom: 18px;
+            padding: 20px;
+            overflow: hidden;
+            border: 1px solid #e6ebf0;
+            border-radius: 12px;
+            background: var(--surface);
+            box-shadow: 0 4px 16px rgba(16, 24, 40, 0.06);
+        }
+        .upload-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 12px;
+            align-items: end;
+        }
+        label { display: block; margin-bottom: 7px; font-weight: 700; }
+        input[type="file"] {
+            width: 100%;
+            padding: 11px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: #fff;
+        }
+        .help { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
+        .btn {
+            display: inline-block;
+            padding: 11px 16px;
+            border: 0;
+            border-radius: 8px;
+            color: #fff;
+            text-decoration: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 700;
+        }
+        .btn-primary { background: var(--primary); }
+        .btn-success { background: var(--success); }
+        .btn-secondary { background: #667085; }
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(6, minmax(120px, 1fr));
+            margin-top: 16px;
+        }
+        .metric {
+            padding: 14px;
+            border: 1px solid var(--border);
+            border-radius: 9px;
+            background: #f9fbfc;
+        }
+        .metric span { display: block; color: var(--muted); font-size: 12px; }
+        .metric strong { display: block; margin-top: 4px; font-size: 24px; }
+        .alert {
+            margin-bottom: 18px;
+            padding: 13px 15px;
+            border-radius: 8px;
+            background: #fee4e2;
+            color: var(--danger);
+        }
+        .success-message {
+            margin-bottom: 16px;
+            padding: 13px 15px;
+            border-radius: 8px;
+            background: #dff3e7;
+            color: #12663b;
+        }
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; min-width: 1500px; border-collapse: collapse; }
+        th, td {
+            padding: 10px;
+            border-bottom: 1px solid #e7ebef;
+            text-align: left;
+            vertical-align: top;
+            font-size: 13px;
+        }
+        th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            background: #eef3f8;
+            color: #344054;
+        }
+        .money { text-align: right; white-space: nowrap; }
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+        .badge-valid { color: #12663b; background: #dff3e7; }
+        .badge-warning { color: #8a4b00; background: #fff0c7; }
+        .badge-duplicate { color: #6941c6; background: #eee7ff; }
+        .badge-error { color: var(--danger); background: #fee4e2; }
+        .notes { min-width: 250px; color: #475467; }
+        .notes div + div { margin-top: 5px; }
+        .preview-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-top: 18px;
+        }
+        @media (max-width: 900px) {
+            .page-header { align-items: flex-start; flex-direction: column; }
+            .upload-grid { grid-template-columns: 1fr; }
+            .summary-grid { grid-template-columns: repeat(2, 1fr); }
+            .preview-actions { align-items: stretch; flex-direction: column; }
+            .preview-actions .btn { text-align: center; }
+        }
+    </style>
+</head>
+<body>
+    <main class="container">
+        <header class="page-header">
+            <div>
+                <h1>Import Master Produk</h1>
+                <p class="subtitle">Upload, validasi, preview, lalu import produk dalam satu transaksi database.</p>
+            </div>
+            <div class="actions">
+                <a class="btn btn-secondary" href="{{ url_for('products') }}">Kembali ke Produk</a>
+            </div>
+        </header>
+
+        {% if error_message %}
+            <div class="alert" role="alert">{{ error_message }}</div>
+        {% endif %}
+
+        <section class="card">
+            <form method="post" enctype="multipart/form-data">
+                <input type="hidden" name="action" value="preview">
+                <div class="upload-grid">
+                    <div>
+                        <label for="product_file">File MASTER PRODUK.xlsx</label>
+                        <input id="product_file" name="product_file" type="file" accept=".xlsx" required>
+                        <p class="help">Maksimum 5 MB. File tidak langsung disimpan; sistem menampilkan preview terlebih dahulu.</p>
+                    </div>
+                    <button class="btn btn-primary" type="submit">Parse &amp; Preview</button>
+                </div>
+            </form>
+        </section>
+
+        {% if summary %}
+            <section class="card">
+                {% if import_completed %}
+                    <div class="success-message">
+                        Import selesai: {{ summary.created }} produk dibuat dan {{ summary.skipped }} baris dilewati.
+                    </div>
+                {% endif %}
+                <h2>{{ "Hasil Import" if import_completed else "Preview Normalisasi" }}</h2>
+                <p class="subtitle">{{ filename }} · SHA-256 {{ file_digest[:12] }}…</p>
+                <div class="summary-grid">
+                    <div class="metric"><span>Total dibaca</span><strong>{{ summary.total }}</strong></div>
+                    <div class="metric"><span>Valid</span><strong>{{ summary.valid }}</strong></div>
+                    <div class="metric"><span>Warning</span><strong>{{ summary.warning }}</strong></div>
+                    <div class="metric"><span>Duplicate</span><strong>{{ summary.duplicate }}</strong></div>
+                    <div class="metric"><span>Error</span><strong>{{ summary.error }}</strong></div>
+                    <div class="metric"><span>{{ "Dibuat" if import_completed else "Siap import" }}</span><strong>{{ summary.created if import_completed else summary.valid + summary.warning }}</strong></div>
+                </div>
+            </section>
+
+            <section class="card">
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Kelompok</th>
+                                <th>Baris</th>
+                                <th>Status</th>
+                                <th>Kode / SKU</th>
+                                <th>Nama Produk</th>
+                                <th>Brand</th>
+                                <th>Subkategori / Jenis</th>
+                                <th>Varian</th>
+                                <th>Warna</th>
+                                <th>Ukuran</th>
+                                <th>Steps</th>
+                                <th class="money">Harga Modal</th>
+                                <th>Catatan</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in rows %}
+                                <tr>
+                                    <td>{{ row.source_group }}</td>
+                                    <td>{{ row.source_row }}</td>
+                                    <td><span class="badge badge-{{ row.status }}">{{ row.status }}</span></td>
+                                    <td>{{ row.kode_produk or "-" }}</td>
+                                    <td><strong>{{ row.nama_produk or "-" }}</strong></td>
+                                    <td>{{ row.brand or "-" }}</td>
+                                    <td>{{ row.subkategori or row.jenis_produk or "-" }}</td>
+                                    <td>{{ row.variant or "-" }}</td>
+                                    <td>{{ row.warna or "-" }}</td>
+                                    <td>{{ row.ukuran or "-" }}</td>
+                                    <td>{{ row.steps or "-" }}</td>
+                                    <td class="money">
+                                        {% if row.harga_modal_default is none %}
+                                            -
+                                        {% else %}
+                                            Rp {{ "{:,.0f}".format(row.harga_modal_default).replace(",", ".") }}
+                                        {% endif %}
+                                    </td>
+                                    <td class="notes">
+                                        {% for message in row.errors %}<div>{{ message }}</div>{% endfor %}
+                                        {% for message in row.warnings %}<div>{{ message }}</div>{% endfor %}
+                                        {% if row.duplicate_message %}<div>{{ row.duplicate_message }}</div>{% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="preview-actions">
+                    <p class="help">Duplicate dan error selalu dilewati. Produk existing tidak pernah ditimpa.</p>
+                    {% if import_completed %}
+                        <button class="btn btn-primary" type="button" id="download-report">Download Laporan Markdown</button>
+                    {% else %}
+                        <form method="post">
+                            <input type="hidden" name="action" value="confirm">
+                            <input type="hidden" name="file_payload" value="{{ file_payload }}">
+                            <input type="hidden" name="file_digest" value="{{ file_digest }}">
+                            <input type="hidden" name="filename" value="{{ filename }}">
+                            <button class="btn btn-success" type="submit">Konfirmasi Import</button>
+                        </form>
+                    {% endif %}
+                </div>
+            </section>
+        {% endif %}
+    </main>
+
+    {% if report_markdown %}
+        <script id="report-data" type="application/json">{{ report_markdown | tojson }}</script>
+        <script>
+            document.getElementById("download-report").addEventListener("click", function () {
+                const report = JSON.parse(document.getElementById("report-data").textContent);
+                const url = URL.createObjectURL(new Blob([report], {type: "text/markdown;charset=utf-8"}));
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = "laporan-import-master-produk.md";
+                link.click();
+                URL.revokeObjectURL(url);
+            });
+        </script>
+    {% endif %}
+</body>
+</html>
