@@ -2346,7 +2346,8 @@ def create_tables():
 
     # ==========================================================
     # QUOTATION / PENAWARAN
-    # PPN belum digunakan karena perusahaan belum PKP.
+    # Tax snapshot disimpan per quotation agar reprint konsisten dan
+    # quotation legacy tetap backward compatible.
     # ==========================================================
     cursor.execute(
         """
@@ -2364,6 +2365,14 @@ def create_tables():
 
             subtotal INTEGER NOT NULL DEFAULT 0,
             diskon INTEGER NOT NULL DEFAULT 0,
+            is_ppn INTEGER NOT NULL DEFAULT 0
+                CHECK (is_ppn IN (0, 1)),
+            ppn_rate INTEGER NOT NULL DEFAULT 0
+                CHECK (ppn_rate >= 0),
+            dpp INTEGER NOT NULL DEFAULT 0
+                CHECK (dpp >= 0),
+            ppn_amount INTEGER NOT NULL DEFAULT 0
+                CHECK (ppn_amount >= 0),
             grand_total INTEGER NOT NULL DEFAULT 0,
 
             catatan TEXT,
@@ -2429,6 +2438,30 @@ def create_tables():
         "sales_quotations",
         "diskon",
         "INTEGER NOT NULL DEFAULT 0",
+    )
+    ensure_column(
+        conn,
+        "sales_quotations",
+        "is_ppn",
+        "INTEGER NOT NULL DEFAULT 0 CHECK (is_ppn IN (0, 1))",
+    )
+    ensure_column(
+        conn,
+        "sales_quotations",
+        "ppn_rate",
+        "INTEGER NOT NULL DEFAULT 0 CHECK (ppn_rate >= 0)",
+    )
+    ensure_column(
+        conn,
+        "sales_quotations",
+        "dpp",
+        "INTEGER NOT NULL DEFAULT 0 CHECK (dpp >= 0)",
+    )
+    ensure_column(
+        conn,
+        "sales_quotations",
+        "ppn_amount",
+        "INTEGER NOT NULL DEFAULT 0 CHECK (ppn_amount >= 0)",
     )
     ensure_column(
         conn,
@@ -2509,6 +2542,31 @@ def create_tables():
     )
     ensure_column(conn, "sales_quotations", "created_at", "TIMESTAMP")
     ensure_column(conn, "sales_quotations", "updated_at", "TIMESTAMP")
+
+    # Semua quotation sebelum hotfix 6.1 dianggap tanpa PPN. DPP dapat
+    # diturunkan secara aman dari total existing tanpa mengubah grand_total.
+    # Baris dengan is_ppn = 1 adalah snapshot baru dan tidak ditimpa.
+    cursor.execute(
+        """
+        UPDATE sales_quotations
+        SET is_ppn = COALESCE(is_ppn, 0),
+            ppn_rate = CASE
+                WHEN COALESCE(is_ppn, 0) = 0 THEN 0
+                ELSE COALESCE(ppn_rate, 0)
+            END,
+            dpp = CASE
+                WHEN COALESCE(is_ppn, 0) = 0 THEN MAX(
+                    COALESCE(subtotal, 0) - COALESCE(diskon, 0),
+                    0
+                )
+                ELSE COALESCE(dpp, 0)
+            END,
+            ppn_amount = CASE
+                WHEN COALESCE(is_ppn, 0) = 0 THEN 0
+                ELSE COALESCE(ppn_amount, 0)
+            END
+        """
+    )
 
     cursor.execute(
         """

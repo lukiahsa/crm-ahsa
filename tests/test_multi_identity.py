@@ -95,23 +95,37 @@ class MultiIdentityRegressionTest(unittest.TestCase):
         self.assertIsNotNone(row)
         return row["id"]
 
-    def create_quotation(self, identity_type):
+    def create_quotation(
+        self,
+        identity_type,
+        *,
+        unit_price=100000,
+        global_discount=0,
+        item_discount=0,
+        qty=1,
+        extra_data=None,
+    ):
+        data = {
+            "identity_id": str(self.identity_id(identity_type)),
+            "customer_id": str(self.customer_id),
+            "tanggal": "2026-08-01",
+            "berlaku_sampai": "2026-08-15",
+            "sales": "QA Engineer",
+            "diskon": str(global_discount),
+            "catatan": "Regression test",
+            "syarat_ketentuan": "Syarat regression test",
+            "product_id[]": [str(self.product_id)],
+            "qty[]": [str(qty)],
+            "harga_satuan[]": [str(unit_price)],
+            "diskon_item[]": [str(item_discount)],
+        }
+
+        if extra_data:
+            data.update(extra_data)
+
         response = self.client.post(
             "/quotations/add",
-            data={
-                "identity_id": str(self.identity_id(identity_type)),
-                "customer_id": str(self.customer_id),
-                "tanggal": "2026-08-01",
-                "berlaku_sampai": "2026-08-15",
-                "sales": "QA Engineer",
-                "diskon": "0",
-                "catatan": "Regression test",
-                "syarat_ketentuan": "Syarat regression test",
-                "product_id[]": [str(self.product_id)],
-                "qty[]": ["1"],
-                "harga_satuan[]": ["100000"],
-                "diskon_item[]": ["0"],
-            },
+            data=data,
         )
         self.assertEqual(
             response.status_code,
@@ -147,7 +161,66 @@ class MultiIdentityRegressionTest(unittest.TestCase):
         ).fetchone()
         conn.close()
         self.assertIsNotNone(quotation["converted_transaction_id"])
+        self.assert_transaction_financial_invariants(
+            quotation["converted_transaction_id"]
+        )
         return quotation_id, quotation["converted_transaction_id"]
+
+    def assert_transaction_financial_invariants(self, transaction_id):
+        conn = database.get_connection()
+        transaction = conn.execute(
+            """
+            SELECT total_penjualan, total_modal, margin
+            FROM sales_transactions
+            WHERE id = ?
+            """,
+            (transaction_id,),
+        ).fetchone()
+        detail_totals = conn.execute(
+            """
+            SELECT
+                COALESCE(SUM(subtotal_penjualan), 0)
+                    AS total_penjualan,
+                COALESCE(SUM(subtotal_modal), 0)
+                    AS total_modal,
+                COALESCE(SUM(margin_item), 0)
+                    AS margin
+            FROM sales_transaction_items
+            WHERE transaction_id = ?
+            """,
+            (transaction_id,),
+        ).fetchone()
+        conn.close()
+
+        self.assertIsNotNone(transaction)
+        self.assertEqual(
+            transaction["total_penjualan"],
+            detail_totals["total_penjualan"],
+        )
+        self.assertEqual(
+            transaction["total_modal"],
+            detail_totals["total_modal"],
+        )
+        self.assertEqual(
+            transaction["margin"],
+            detail_totals["margin"],
+        )
+        self.assertEqual(
+            transaction["margin"],
+            transaction["total_penjualan"]
+            - transaction["total_modal"],
+        )
+        for value in (
+            transaction["total_penjualan"],
+            transaction["total_modal"],
+            transaction["margin"],
+            detail_totals["total_penjualan"],
+            detail_totals["total_modal"],
+            detail_totals["margin"],
+        ):
+            self.assertIsInstance(value, int)
+
+        return transaction, detail_totals
 
     def test_identity_seed_and_legacy_quotation_fallback(self):
         database.create_tables()
@@ -351,6 +424,628 @@ class MultiIdentityRegressionTest(unittest.TestCase):
         self.assertEqual(denko["allow_qr"], 0)
         self.assertEqual(denko["allow_website_footer"], 0)
         self.assertEqual(denko["allow_transaction_conversion"], 0)
+
+    def test_quotation_tax_rules_ignore_request_tampering(self):
+        ahsa_id = self.create_quotation(
+            main.IDENTITY_TYPE_FULL,
+            unit_price=10000000,
+            extra_data={
+                "is_ppn": "1",
+                "ppn_rate": "99",
+            },
+        )
+        denko_id = self.create_quotation(
+            main.IDENTITY_TYPE_QUOTATION_ONLY,
+            unit_price=10000000,
+            extra_data={
+                "is_ppn": "0",
+                "ppn_rate": "7",
+            },
+        )
+
+        edit_response = self.client.post(
+            f"/quotations/{denko_id}/edit",
+            data={
+                "identity_id": str(
+                    self.identity_id(main.IDENTITY_TYPE_QUOTATION_ONLY)
+                ),
+                "customer_id": str(self.customer_id),
+                "tanggal": "2026-08-01",
+                "berlaku_sampai": "2026-08-15",
+                "sales": "QA Engineer",
+                "diskon": "0",
+                "is_ppn": "0",
+                "ppn_rate": "22",
+                "catatan": "Regression test",
+                "syarat_ketentuan": "Syarat regression test",
+                "product_id[]": [str(self.product_id)],
+                "qty[]": ["1"],
+                "harga_satuan[]": ["10000000"],
+                "diskon_item[]": ["0"],
+            },
+        )
+        self.assertEqual(edit_response.status_code, 302)
+
+        conn = database.get_connection()
+        ahsa = conn.execute(
+            "SELECT * FROM sales_quotations WHERE id = ?",
+            (ahsa_id,),
+        ).fetchone()
+        denko = conn.execute(
+            "SELECT * FROM sales_quotations WHERE id = ?",
+            (denko_id,),
+        ).fetchone()
+        denko_identity = conn.execute(
+            """
+            SELECT *
+            FROM company_identities
+            WHERE identity_type = ?
+            """,
+            (main.IDENTITY_TYPE_QUOTATION_ONLY,),
+        ).fetchone()
+        conn.close()
+
+        self.assertEqual(ahsa["is_ppn"], 0)
+        self.assertEqual(ahsa["ppn_rate"], 0)
+        self.assertEqual(ahsa["ppn_amount"], 0)
+        self.assertEqual(ahsa["dpp"], 10000000)
+        self.assertEqual(ahsa["grand_total"], 10000000)
+
+        self.assertEqual(denko["subtotal"], 10000000)
+        self.assertEqual(denko["diskon"], 0)
+        self.assertEqual(denko["is_ppn"], 1)
+        self.assertEqual(denko["ppn_rate"], 11)
+        self.assertEqual(denko["dpp"], 10000000)
+        self.assertEqual(denko["ppn_amount"], 1100000)
+        self.assertEqual(denko["grand_total"], 11100000)
+
+        rounded = main.calculate_quotation_totals(
+            105,
+            0,
+            denko_identity,
+        )
+        self.assertIsInstance(rounded["ppn_amount"], int)
+        self.assertEqual(rounded["ppn_amount"], 12)
+
+    def test_denko_discount_pdf_and_terbilang_use_taxed_total(self):
+        denko_id = self.create_quotation(
+            main.IDENTITY_TYPE_QUOTATION_ONLY,
+            unit_price=10000000,
+            global_discount=1000000,
+        )
+        ahsa_id = self.create_quotation(
+            main.IDENTITY_TYPE_FULL,
+            unit_price=10000000,
+            global_discount=1000000,
+        )
+
+        conn = database.get_connection()
+        denko = conn.execute(
+            "SELECT * FROM sales_quotations WHERE id = ?",
+            (denko_id,),
+        ).fetchone()
+        conn.close()
+
+        self.assertEqual(denko["dpp"], 9000000)
+        self.assertEqual(denko["ppn_amount"], 990000)
+        self.assertEqual(denko["grand_total"], 9990000)
+
+        denko_html = self.client.get(
+            f"/quotations/{denko_id}/print"
+        ).get_data(as_text=True)
+        ahsa_html = self.client.get(
+            f"/quotations/{ahsa_id}/print"
+        ).get_data(as_text=True)
+
+        self.assertIn("<strong>DPP</strong>", denko_html)
+        self.assertIn("<strong>PPN 11%</strong>", denko_html)
+        self.assertIn("Rp 9.000.000", denko_html)
+        self.assertIn("Rp 990.000", denko_html)
+        self.assertIn("Rp 9.990.000", denko_html)
+        self.assertIn(
+            "Sembilan Juta Sembilan Ratus Sembilan Puluh Ribu Rupiah",
+            denko_html,
+        )
+        self.assertNotIn("<strong>DPP</strong>", ahsa_html)
+        self.assertNotIn("<strong>PPN 11%</strong>", ahsa_html)
+
+    def test_duplicate_denko_recalculates_mandatory_tax(self):
+        denko_id = self.create_quotation(
+            main.IDENTITY_TYPE_QUOTATION_ONLY,
+            unit_price=10000000,
+        )
+
+        conn = database.get_connection()
+        conn.execute(
+            """
+            UPDATE sales_quotations
+            SET is_ppn = 0,
+                ppn_rate = 0,
+                dpp = 0,
+                ppn_amount = 0,
+                grand_total = 10000000
+            WHERE id = ?
+            """,
+            (denko_id,),
+        )
+        conn.commit()
+        conn.close()
+
+        response = self.client.post(
+            f"/quotations/{denko_id}/duplicate"
+        )
+        self.assertEqual(response.status_code, 302)
+        duplicate_id = int(response.headers["Location"].split("/")[-2])
+
+        conn = database.get_connection()
+        duplicate = conn.execute(
+            """
+            SELECT
+                sales_quotations.*,
+                company_identities.identity_type
+            FROM sales_quotations
+            JOIN company_identities
+                ON sales_quotations.identity_id = company_identities.id
+            WHERE sales_quotations.id = ?
+            """,
+            (duplicate_id,),
+        ).fetchone()
+        conn.close()
+
+        self.assertEqual(
+            duplicate["identity_type"],
+            main.IDENTITY_TYPE_QUOTATION_ONLY,
+        )
+        self.assertEqual(duplicate["is_ppn"], 1)
+        self.assertEqual(duplicate["ppn_rate"], 11)
+        self.assertEqual(duplicate["dpp"], 10000000)
+        self.assertEqual(duplicate["ppn_amount"], 1100000)
+        self.assertEqual(duplicate["grand_total"], 11100000)
+
+    def test_tax_migration_is_idempotent_and_preserves_legacy_total(self):
+        denko_identity_id = self.identity_id(
+            main.IDENTITY_TYPE_QUOTATION_ONLY
+        )
+        conn = database.get_connection()
+        legacy_id = conn.execute(
+            """
+            INSERT INTO sales_quotations (
+                nomor_penawaran,
+                customer_id,
+                tanggal,
+                subtotal,
+                diskon,
+                grand_total,
+                identity_id
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "QT-DENKO-BEFORE-PPN",
+                self.customer_id,
+                "2026-07-31",
+                10000000,
+                0,
+                10000000,
+                denko_identity_id,
+            ),
+        ).lastrowid
+        conn.commit()
+        conn.close()
+
+        database.create_tables()
+        database.create_tables()
+
+        conn = database.get_connection()
+        legacy = conn.execute(
+            "SELECT * FROM sales_quotations WHERE id = ?",
+            (legacy_id,),
+        ).fetchone()
+        columns = {
+            row["name"]
+            for row in conn.execute(
+                "PRAGMA table_info(sales_quotations)"
+            ).fetchall()
+        }
+        integrity = conn.execute("PRAGMA integrity_check").fetchone()[0]
+        conn.close()
+
+        self.assertTrue(
+            {"is_ppn", "ppn_rate", "dpp", "ppn_amount"}.issubset(columns)
+        )
+        self.assertEqual(legacy["is_ppn"], 0)
+        self.assertEqual(legacy["ppn_rate"], 0)
+        self.assertEqual(legacy["dpp"], 10000000)
+        self.assertEqual(legacy["ppn_amount"], 0)
+        self.assertEqual(legacy["grand_total"], 10000000)
+        self.assertEqual(integrity, "ok")
+
+        legacy_html = self.client.get(
+            f"/quotations/{legacy_id}/print"
+        ).get_data(as_text=True)
+        self.assertNotIn("<strong>PPN 11%</strong>", legacy_html)
+        self.assertIn("Rp 10.000.000", legacy_html)
+
+    def test_global_discount_allocation_is_proportional(self):
+        allocated = main.allocate_global_discount(
+            [
+                {
+                    "qty": 1,
+                    "harga_satuan": 6000000,
+                    "diskon_item": 0,
+                },
+                {
+                    "qty": 1,
+                    "harga_satuan": 4000000,
+                    "diskon_item": 0,
+                },
+            ],
+            1000000,
+        )
+
+        self.assertEqual(
+            [item["subtotal_awal"] for item in allocated],
+            [6000000, 4000000],
+        )
+        self.assertEqual(
+            [item["diskon_global_alokasi"] for item in allocated],
+            [600000, 400000],
+        )
+        self.assertEqual(
+            [item["subtotal_akhir"] for item in allocated],
+            [5400000, 3600000],
+        )
+        self.assertEqual(
+            sum(
+                item["diskon_global_alokasi"]
+                for item in allocated
+            ),
+            1000000,
+        )
+
+    def test_global_discount_allocation_handles_rounding_and_edges(self):
+        equal_items = [
+            {
+                "qty": 1,
+                "harga_satuan": 1,
+                "diskon_item": 0,
+            }
+            for _ in range(3)
+        ]
+        rounded = main.allocate_global_discount(
+            equal_items,
+            2,
+        )
+
+        self.assertEqual(
+            [item["diskon_global_alokasi"] for item in rounded],
+            [1, 1, 0],
+        )
+        self.assertEqual(
+            sum(
+                item["diskon_global_alokasi"]
+                for item in rounded
+            ),
+            2,
+        )
+
+        single = main.allocate_global_discount(
+            [{"qty": 1, "harga_satuan": 100, "diskon_item": 0}],
+            40,
+        )
+        self.assertEqual(single[0]["diskon_global_alokasi"], 40)
+        self.assertEqual(single[0]["subtotal_akhir"], 60)
+
+        excessive = main.allocate_global_discount(
+            [
+                {"qty": 1, "harga_satuan": 60, "diskon_item": 0},
+                {"qty": 1, "harga_satuan": 40, "diskon_item": 0},
+            ],
+            200,
+        )
+        self.assertEqual(
+            [item["diskon_global_alokasi"] for item in excessive],
+            [60, 40],
+        )
+        self.assertEqual(
+            [item["subtotal_akhir"] for item in excessive],
+            [0, 0],
+        )
+
+        no_discount = main.allocate_global_discount(
+            [{"qty": 2, "harga_satuan": 50, "diskon_item": 10}],
+            0,
+        )
+        self.assertEqual(no_discount[0]["subtotal_awal"], 90)
+        self.assertEqual(no_discount[0]["diskon_global_alokasi"], 0)
+        self.assertEqual(no_discount[0]["subtotal_akhir"], 90)
+
+        zero_base = main.allocate_global_discount(
+            [{"qty": 1, "harga_satuan": 0, "diskon_item": 0}],
+            10,
+        )
+        self.assertEqual(zero_base[0]["subtotal_akhir"], 0)
+        self.assertEqual(
+            main.allocate_global_discount([], 10),
+            [],
+        )
+
+        for scenario in (rounded, single, excessive, no_discount, zero_base):
+            for item in scenario:
+                self.assertIsInstance(item["subtotal_awal"], int)
+                self.assertIsInstance(
+                    item["diskon_global_alokasi"],
+                    int,
+                )
+                self.assertIsInstance(item["subtotal_akhir"], int)
+                self.assertIsInstance(item["margin_item"], int)
+                self.assertGreaterEqual(item["subtotal_akhir"], 0)
+
+    def test_financial_engine_handles_many_items_and_combined_discounts(self):
+        allocated = main.allocate_global_discount(
+            [
+                {
+                    "qty": 2,
+                    "harga_satuan": 4000000,
+                    "diskon_item": 2000000,
+                    "subtotal_modal": 2000000,
+                },
+                {
+                    "qty": 1,
+                    "harga_satuan": 4000000,
+                    "diskon_item": 0,
+                    "subtotal_modal": 1000000,
+                },
+                {
+                    "qty": 0,
+                    "harga_satuan": 1000000,
+                    "diskon_item": 0,
+                    "subtotal_modal": 0,
+                },
+                {
+                    "qty": 1,
+                    "harga_satuan": 0,
+                    "diskon_item": 0,
+                    "subtotal_modal": 0,
+                },
+                {
+                    "qty": -2,
+                    "harga_satuan": 100,
+                    "diskon_item": 0,
+                    "subtotal_modal": 0,
+                },
+                {
+                    "qty": 1,
+                    "harga_satuan": 100,
+                    "diskon_item": 200,
+                    "subtotal_modal": 0,
+                },
+            ],
+            1000000,
+        )
+
+        self.assertEqual(
+            [item["subtotal_awal"] for item in allocated],
+            [6000000, 4000000, 0, 0, 0, 0],
+        )
+        self.assertEqual(
+            [item["diskon_global_alokasi"] for item in allocated],
+            [600000, 400000, 0, 0, 0, 0],
+        )
+        self.assertEqual(
+            [item["subtotal_akhir"] for item in allocated],
+            [5400000, 3600000, 0, 0, 0, 0],
+        )
+        self.assertTrue(
+            all(item["subtotal_akhir"] >= 0 for item in allocated)
+        )
+
+        financials = main.calculate_transaction_financials(
+            [
+                {
+                    "subtotal_penjualan": item["subtotal_akhir"],
+                    "subtotal_modal": item["subtotal_modal"],
+                    "margin_item": item["margin_item"],
+                }
+                for item in allocated
+            ]
+        )
+        self.assertEqual(financials["total_penjualan"], 9000000)
+        self.assertEqual(financials["total_modal"], 3000000)
+        self.assertEqual(financials["margin"], 6000000)
+        self.assertEqual(
+            financials["margin"],
+            financials["total_penjualan"] - financials["total_modal"],
+        )
+
+    def test_marketplace_add_and_edit_preserve_financial_invariants(self):
+        add_response = self.client.post(
+            "/transactions/add",
+            data={
+                "customer_id": str(self.customer_id),
+                "tanggal": "2026-08-02",
+                "jenis_penjualan": "Marketplace",
+                "referal": "Marketplace QA",
+                "admin_fee": "100000",
+                "potongan": "50000",
+                "biaya_lain": "25000",
+                "keterangan_biaya": "Biaya QA",
+                "catatan": "Invariant add",
+                "product_id[]": [
+                    str(self.product_id),
+                    str(self.product_id),
+                ],
+                "qty[]": ["1", "1"],
+                "harga_jual[]": ["600000", "400000"],
+                "harga_modal[]": ["200000", "100000"],
+            },
+        )
+        self.assertEqual(
+            add_response.status_code,
+            302,
+            add_response.get_data(as_text=True),
+        )
+        transaction_id = int(
+            add_response.headers["Location"].rstrip("/").split("/")[-1]
+        )
+        self.assert_transaction_financial_invariants(transaction_id)
+
+        conn = database.get_connection()
+        transaction = conn.execute(
+            "SELECT * FROM sales_transactions WHERE id = ?",
+            (transaction_id,),
+        ).fetchone()
+        conn.close()
+        self.assertEqual(transaction["total_penjualan"], 1000000)
+        self.assertEqual(transaction["total_modal"], 300000)
+        self.assertEqual(transaction["margin"], 700000)
+        self.assertEqual(transaction["jumlah_diterima"], 850000)
+        self.assertEqual(transaction["laba_bersih"], 525000)
+
+        edit_response = self.client.post(
+            f"/transactions/{transaction_id}/edit",
+            data={
+                "customer_id": str(self.customer_id),
+                "tanggal": "2026-08-03",
+                "jenis_penjualan": "Marketplace",
+                "referal": "Marketplace QA Edit",
+                "admin_fee": "70000",
+                "potongan": "30000",
+                "biaya_lain": "20000",
+                "keterangan_biaya": "Biaya QA Edit",
+                "catatan": "Invariant edit",
+                "product_id[]": [
+                    str(self.product_id),
+                    str(self.product_id),
+                ],
+                "qty[]": ["1", "1"],
+                "harga_jual[]": ["400000", "300000"],
+                "harga_modal[]": ["100000", "100000"],
+            },
+        )
+        self.assertEqual(
+            edit_response.status_code,
+            302,
+            edit_response.get_data(as_text=True),
+        )
+        self.assert_transaction_financial_invariants(transaction_id)
+
+        conn = database.get_connection()
+        edited = conn.execute(
+            "SELECT * FROM sales_transactions WHERE id = ?",
+            (transaction_id,),
+        ).fetchone()
+        conn.close()
+        self.assertEqual(edited["total_penjualan"], 700000)
+        self.assertEqual(edited["total_modal"], 200000)
+        self.assertEqual(edited["margin"], 500000)
+        self.assertEqual(edited["jumlah_diterima"], 600000)
+        self.assertEqual(edited["laba_bersih"], 380000)
+
+    def test_ahsa_conversion_allocates_global_discount_to_details(self):
+        conn = database.get_connection()
+        second_product_id = conn.execute(
+            """
+            INSERT INTO products (
+                kode_produk,
+                nama_produk,
+                satuan,
+                harga_jual_default,
+                harga_modal_default
+            )
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                "QA-002",
+                "Produk Regression QA Kedua",
+                "Unit",
+                100000,
+                40000,
+            ),
+        ).lastrowid
+        conn.commit()
+        conn.close()
+
+        response = self.client.post(
+            "/quotations/add",
+            data={
+                "identity_id": str(
+                    self.identity_id(main.IDENTITY_TYPE_FULL)
+                ),
+                "customer_id": str(self.customer_id),
+                "tanggal": "2026-08-01",
+                "berlaku_sampai": "2026-08-15",
+                "sales": "QA Engineer",
+                "diskon": "1000000",
+                "product_id[]": [
+                    str(self.product_id),
+                    str(second_product_id),
+                ],
+                "qty[]": ["1", "1"],
+                "harga_satuan[]": ["6000000", "4000000"],
+                "diskon_item[]": ["0", "0"],
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        quotation_id = int(
+            response.headers["Location"].rstrip("/").split("/")[-1]
+        )
+
+        conversion = self.client.post(
+            f"/quotations/{quotation_id}/convert"
+        )
+        self.assertEqual(
+            conversion.status_code,
+            302,
+            conversion.get_data(as_text=True),
+        )
+
+        conn = database.get_connection()
+        quotation = conn.execute(
+            """
+            SELECT converted_transaction_id
+            FROM sales_quotations
+            WHERE id = ?
+            """,
+            (quotation_id,),
+        ).fetchone()
+        details = conn.execute(
+            """
+            SELECT subtotal_penjualan, subtotal_modal, margin_item
+            FROM sales_transaction_items
+            WHERE transaction_id = ?
+            ORDER BY id ASC
+            """,
+            (quotation["converted_transaction_id"],),
+        ).fetchall()
+        conn.close()
+
+        transaction, detail_totals = (
+            self.assert_transaction_financial_invariants(
+                quotation["converted_transaction_id"]
+            )
+        )
+        self.assertEqual(transaction["total_penjualan"], 9000000)
+        self.assertEqual(detail_totals["total_penjualan"], 9000000)
+        self.assertEqual(
+            [item["subtotal_penjualan"] for item in details],
+            [5400000, 3600000],
+        )
+        self.assertEqual(
+            [
+                6000000 - details[0]["subtotal_penjualan"],
+                4000000 - details[1]["subtotal_penjualan"],
+            ],
+            [600000, 400000],
+        )
+        self.assertEqual(
+            transaction["margin"],
+            sum(item["margin_item"] for item in details),
+        )
+        self.assertEqual(
+            transaction["total_modal"],
+            sum(item["subtotal_modal"] for item in details),
+        )
 
     def test_ahsa_quotation_converts_to_transaction(self):
         quotation_id, transaction_id = self.convert_ahsa_quotation()
