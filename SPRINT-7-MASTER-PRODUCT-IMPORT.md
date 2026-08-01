@@ -150,8 +150,8 @@ Coverage import mencakup tiga kelompok, forward-fill, integer Rupiah, harga koso
 
 ## Commit Implementasi
 
-- `0f03284` — `feat(product): add normalized XLSX import engine`
-- `c7b0bb4` — `feat(product): add import preview and confirmation workflow`
-- `e23c613` — `test(product): cover master product import workflow`
+- `6ad2011` — `feat(product): add normalized XLSX import engine`
+- `4c18be6` — `feat(product): add import preview and confirmation workflow`
+- `9fdcde5` — `test(product): cover master product import workflow`
 
 Branch tidak di-merge ke `main` sebelum review.
