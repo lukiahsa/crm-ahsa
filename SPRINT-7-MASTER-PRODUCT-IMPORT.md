@@ -64,6 +64,8 @@ Kode, ukuran, merk, dan format Steps seperti `2x6`, `4x4`, maupun angka biasa di
 
 Normalisasi hanya melakukan trim, menghapus spasi ganda, mengubah sel kosong menjadi `NULL`, dan mengubah nominal integral menjadi integer Rupiah. Tidak ada perubahan makna nama dan tidak ada perhitungan nominal dengan float.
 
+Importer tidak mengisi `harga_jual_default`; kolom tersebut tidak disertakan dalam perintah `INSERT`, sehingga tetap mengikuti default schema existing sampai ada harga jual resmi.
+
 ## Forward-fill
 
 Workbook menggunakan merged cell untuk Nama Produk, Kapasitas, Merk, Jenis Produk, dan subkategori. Parser membaca nilai terakhir yang eksplisit pada kelompok/kolom yang sama dan meneruskannya ke baris detail berikutnya. Nilai detail seperti warna, tipe, ukuran, Steps, dan harga tidak di-forward-fill kecuali memang merupakan identitas kelompok yang di-merge.

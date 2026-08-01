@@ -530,14 +530,13 @@ def _insert_product(conn, row):
             color_id,
             size_id,
             satuan,
-            harga_jual_default,
             harga_modal_default,
             status_aktif,
             subkategori,
             jenis_produk,
             steps
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 1, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
         """,
         (
             row["kode_produk"],
