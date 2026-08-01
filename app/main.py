@@ -3372,6 +3372,85 @@ def calculate_quotation_item_subtotal(qty, unit_price, item_discount):
     )
 
 
+def allocate_global_discount_to_items(items, global_discount):
+    """Alokasikan diskon global secara proporsional dan deterministik."""
+    allocated_items = []
+
+    for stable_index, item in enumerate(items):
+        allocated_item = dict(item)
+        allocated_item["base_subtotal"] = (
+            calculate_quotation_item_subtotal(
+                item["qty"],
+                item["harga_satuan"],
+                item["diskon_item"],
+            )
+        )
+        allocated_item["allocated_global_discount"] = 0
+        allocated_item["final_subtotal"] = allocated_item[
+            "base_subtotal"
+        ]
+        allocated_item["_stable_index"] = stable_index
+        allocated_items.append(allocated_item)
+
+    total_item_base = sum(
+        item["base_subtotal"] for item in allocated_items
+    )
+    effective_discount = min(
+        max(int(global_discount or 0), 0),
+        total_item_base,
+    )
+
+    if not allocated_items or total_item_base == 0:
+        for item in allocated_items:
+            item.pop("_stable_index", None)
+        return allocated_items
+
+    for item in allocated_items:
+        item["allocated_global_discount"] = (
+            effective_discount
+            * item["base_subtotal"]
+            // total_item_base
+        )
+
+    remaining_discount = effective_discount - sum(
+        item["allocated_global_discount"]
+        for item in allocated_items
+    )
+
+    remainder_order = sorted(
+        allocated_items,
+        key=lambda item: (
+            -item["base_subtotal"],
+            item["_stable_index"],
+        ),
+    )
+
+    for item in remainder_order:
+        if remaining_discount == 0:
+            break
+
+        available = (
+            item["base_subtotal"]
+            - item["allocated_global_discount"]
+        )
+        extra = min(available, remaining_discount)
+        item["allocated_global_discount"] += extra
+        remaining_discount -= extra
+
+    if remaining_discount != 0:
+        raise ValueError("Sisa diskon global tidak dapat dialokasikan.")
+
+    for item in allocated_items:
+        item["final_subtotal"] = max(
+            item["base_subtotal"]
+            - item["allocated_global_discount"],
+            0,
+        )
+        item.pop("_stable_index", None)
+
+    return allocated_items
+
+
 def prepare_quotation_items(conn, form):
     product_ids = form.getlist("product_id[]")
     qty_values = form.getlist("qty[]")
@@ -4581,6 +4660,16 @@ def convert_quotation_to_transaction(quotation_id):
     ).fetchall()
 
     try:
+        allocated_items = allocate_global_discount_to_items(
+            items,
+            quotation["diskon"],
+        )
+
+        if not allocated_items:
+            raise ValueError(
+                "Quotation tidak memiliki item untuk dikonversi."
+            )
+
         nomor_transaksi = generate_document_number(
             conn=conn,
             prefix="TRX",
@@ -4589,14 +4678,13 @@ def convert_quotation_to_transaction(quotation_id):
             column_name="nomor_transaksi",
         )
 
-        total_penjualan = int(
-            quotation["grand_total"] or 0
-        )
+        total_penjualan = 0
         total_modal = 0
+        total_margin = 0
 
         prepared_items = []
 
-        for item in items:
+        for item in allocated_items:
             product = get_product_by_id(
                 conn,
                 item["product_id"],
@@ -4609,17 +4697,14 @@ def convert_quotation_to_transaction(quotation_id):
             )
             qty = int(item["qty"] or 0)
             harga_jual = int(item["harga_satuan"] or 0)
-            diskon_item = int(item["diskon_item"] or 0)
-
-            subtotal_penjualan = max(
-                (qty * harga_jual) - diskon_item,
-                0,
-            )
+            subtotal_penjualan = int(item["final_subtotal"])
             subtotal_modal = qty * harga_modal
             margin_item = (
                 subtotal_penjualan - subtotal_modal
             )
+            total_penjualan += subtotal_penjualan
             total_modal += subtotal_modal
+            total_margin += margin_item
 
             prepared_items.append(
                 {
@@ -4641,7 +4726,12 @@ def convert_quotation_to_transaction(quotation_id):
                 }
             )
 
-        margin = total_penjualan - total_modal
+        margin = total_margin
+
+        if margin != total_penjualan - total_modal:
+            raise ValueError(
+                "Invariant margin transaksi tidak konsisten."
+            )
 
         cursor = conn.execute(
             """
@@ -4764,7 +4854,7 @@ def convert_quotation_to_transaction(quotation_id):
             )
         )
 
-    except sqlite3.Error as error:
+    except (ValueError, sqlite3.Error) as error:
         conn.rollback()
         conn.close()
         return f"Gagal mengubah penawaran menjadi transaksi: {error}", 400
