@@ -205,6 +205,20 @@ class MultiIdentityRegressionTest(unittest.TestCase):
             transaction["margin"],
             detail_totals["margin"],
         )
+        self.assertEqual(
+            transaction["margin"],
+            transaction["total_penjualan"]
+            - transaction["total_modal"],
+        )
+        for value in (
+            transaction["total_penjualan"],
+            transaction["total_modal"],
+            transaction["margin"],
+            detail_totals["total_penjualan"],
+            detail_totals["total_modal"],
+            detail_totals["margin"],
+        ):
+            self.assertIsInstance(value, int)
 
         return transaction, detail_totals
 
@@ -653,7 +667,7 @@ class MultiIdentityRegressionTest(unittest.TestCase):
         self.assertIn("Rp 10.000.000", legacy_html)
 
     def test_global_discount_allocation_is_proportional(self):
-        allocated = main.allocate_global_discount_to_items(
+        allocated = main.allocate_global_discount(
             [
                 {
                     "qty": 1,
@@ -670,20 +684,20 @@ class MultiIdentityRegressionTest(unittest.TestCase):
         )
 
         self.assertEqual(
-            [item["base_subtotal"] for item in allocated],
+            [item["subtotal_awal"] for item in allocated],
             [6000000, 4000000],
         )
         self.assertEqual(
-            [item["allocated_global_discount"] for item in allocated],
+            [item["diskon_global_alokasi"] for item in allocated],
             [600000, 400000],
         )
         self.assertEqual(
-            [item["final_subtotal"] for item in allocated],
+            [item["subtotal_akhir"] for item in allocated],
             [5400000, 3600000],
         )
         self.assertEqual(
             sum(
-                item["allocated_global_discount"]
+                item["diskon_global_alokasi"]
                 for item in allocated
             ),
             1000000,
@@ -698,31 +712,31 @@ class MultiIdentityRegressionTest(unittest.TestCase):
             }
             for _ in range(3)
         ]
-        rounded = main.allocate_global_discount_to_items(
+        rounded = main.allocate_global_discount(
             equal_items,
             2,
         )
 
         self.assertEqual(
-            [item["allocated_global_discount"] for item in rounded],
+            [item["diskon_global_alokasi"] for item in rounded],
             [1, 1, 0],
         )
         self.assertEqual(
             sum(
-                item["allocated_global_discount"]
+                item["diskon_global_alokasi"]
                 for item in rounded
             ),
             2,
         )
 
-        single = main.allocate_global_discount_to_items(
+        single = main.allocate_global_discount(
             [{"qty": 1, "harga_satuan": 100, "diskon_item": 0}],
             40,
         )
-        self.assertEqual(single[0]["allocated_global_discount"], 40)
-        self.assertEqual(single[0]["final_subtotal"], 60)
+        self.assertEqual(single[0]["diskon_global_alokasi"], 40)
+        self.assertEqual(single[0]["subtotal_akhir"], 60)
 
-        excessive = main.allocate_global_discount_to_items(
+        excessive = main.allocate_global_discount(
             [
                 {"qty": 1, "harga_satuan": 60, "diskon_item": 0},
                 {"qty": 1, "harga_satuan": 40, "diskon_item": 0},
@@ -730,41 +744,203 @@ class MultiIdentityRegressionTest(unittest.TestCase):
             200,
         )
         self.assertEqual(
-            [item["allocated_global_discount"] for item in excessive],
+            [item["diskon_global_alokasi"] for item in excessive],
             [60, 40],
         )
         self.assertEqual(
-            [item["final_subtotal"] for item in excessive],
+            [item["subtotal_akhir"] for item in excessive],
             [0, 0],
         )
 
-        no_discount = main.allocate_global_discount_to_items(
+        no_discount = main.allocate_global_discount(
             [{"qty": 2, "harga_satuan": 50, "diskon_item": 10}],
             0,
         )
-        self.assertEqual(no_discount[0]["base_subtotal"], 90)
-        self.assertEqual(no_discount[0]["allocated_global_discount"], 0)
-        self.assertEqual(no_discount[0]["final_subtotal"], 90)
+        self.assertEqual(no_discount[0]["subtotal_awal"], 90)
+        self.assertEqual(no_discount[0]["diskon_global_alokasi"], 0)
+        self.assertEqual(no_discount[0]["subtotal_akhir"], 90)
 
-        zero_base = main.allocate_global_discount_to_items(
+        zero_base = main.allocate_global_discount(
             [{"qty": 1, "harga_satuan": 0, "diskon_item": 0}],
             10,
         )
-        self.assertEqual(zero_base[0]["final_subtotal"], 0)
+        self.assertEqual(zero_base[0]["subtotal_akhir"], 0)
         self.assertEqual(
-            main.allocate_global_discount_to_items([], 10),
+            main.allocate_global_discount([], 10),
             [],
         )
 
         for scenario in (rounded, single, excessive, no_discount, zero_base):
             for item in scenario:
-                self.assertIsInstance(item["base_subtotal"], int)
+                self.assertIsInstance(item["subtotal_awal"], int)
                 self.assertIsInstance(
-                    item["allocated_global_discount"],
+                    item["diskon_global_alokasi"],
                     int,
                 )
-                self.assertIsInstance(item["final_subtotal"], int)
-                self.assertGreaterEqual(item["final_subtotal"], 0)
+                self.assertIsInstance(item["subtotal_akhir"], int)
+                self.assertIsInstance(item["margin_item"], int)
+                self.assertGreaterEqual(item["subtotal_akhir"], 0)
+
+    def test_financial_engine_handles_many_items_and_combined_discounts(self):
+        allocated = main.allocate_global_discount(
+            [
+                {
+                    "qty": 2,
+                    "harga_satuan": 4000000,
+                    "diskon_item": 2000000,
+                    "subtotal_modal": 2000000,
+                },
+                {
+                    "qty": 1,
+                    "harga_satuan": 4000000,
+                    "diskon_item": 0,
+                    "subtotal_modal": 1000000,
+                },
+                {
+                    "qty": 0,
+                    "harga_satuan": 1000000,
+                    "diskon_item": 0,
+                    "subtotal_modal": 0,
+                },
+                {
+                    "qty": 1,
+                    "harga_satuan": 0,
+                    "diskon_item": 0,
+                    "subtotal_modal": 0,
+                },
+                {
+                    "qty": -2,
+                    "harga_satuan": 100,
+                    "diskon_item": 0,
+                    "subtotal_modal": 0,
+                },
+                {
+                    "qty": 1,
+                    "harga_satuan": 100,
+                    "diskon_item": 200,
+                    "subtotal_modal": 0,
+                },
+            ],
+            1000000,
+        )
+
+        self.assertEqual(
+            [item["subtotal_awal"] for item in allocated],
+            [6000000, 4000000, 0, 0, 0, 0],
+        )
+        self.assertEqual(
+            [item["diskon_global_alokasi"] for item in allocated],
+            [600000, 400000, 0, 0, 0, 0],
+        )
+        self.assertEqual(
+            [item["subtotal_akhir"] for item in allocated],
+            [5400000, 3600000, 0, 0, 0, 0],
+        )
+        self.assertTrue(
+            all(item["subtotal_akhir"] >= 0 for item in allocated)
+        )
+
+        financials = main.calculate_transaction_financials(
+            [
+                {
+                    "subtotal_penjualan": item["subtotal_akhir"],
+                    "subtotal_modal": item["subtotal_modal"],
+                    "margin_item": item["margin_item"],
+                }
+                for item in allocated
+            ]
+        )
+        self.assertEqual(financials["total_penjualan"], 9000000)
+        self.assertEqual(financials["total_modal"], 3000000)
+        self.assertEqual(financials["margin"], 6000000)
+        self.assertEqual(
+            financials["margin"],
+            financials["total_penjualan"] - financials["total_modal"],
+        )
+
+    def test_marketplace_add_and_edit_preserve_financial_invariants(self):
+        add_response = self.client.post(
+            "/transactions/add",
+            data={
+                "customer_id": str(self.customer_id),
+                "tanggal": "2026-08-02",
+                "jenis_penjualan": "Marketplace",
+                "referal": "Marketplace QA",
+                "admin_fee": "100000",
+                "potongan": "50000",
+                "biaya_lain": "25000",
+                "keterangan_biaya": "Biaya QA",
+                "catatan": "Invariant add",
+                "product_id[]": [
+                    str(self.product_id),
+                    str(self.product_id),
+                ],
+                "qty[]": ["1", "1"],
+                "harga_jual[]": ["600000", "400000"],
+                "harga_modal[]": ["200000", "100000"],
+            },
+        )
+        self.assertEqual(
+            add_response.status_code,
+            302,
+            add_response.get_data(as_text=True),
+        )
+        transaction_id = int(
+            add_response.headers["Location"].rstrip("/").split("/")[-1]
+        )
+        self.assert_transaction_financial_invariants(transaction_id)
+
+        conn = database.get_connection()
+        transaction = conn.execute(
+            "SELECT * FROM sales_transactions WHERE id = ?",
+            (transaction_id,),
+        ).fetchone()
+        conn.close()
+        self.assertEqual(transaction["total_penjualan"], 1000000)
+        self.assertEqual(transaction["total_modal"], 300000)
+        self.assertEqual(transaction["margin"], 700000)
+        self.assertEqual(transaction["jumlah_diterima"], 850000)
+        self.assertEqual(transaction["laba_bersih"], 525000)
+
+        edit_response = self.client.post(
+            f"/transactions/{transaction_id}/edit",
+            data={
+                "customer_id": str(self.customer_id),
+                "tanggal": "2026-08-03",
+                "jenis_penjualan": "Marketplace",
+                "referal": "Marketplace QA Edit",
+                "admin_fee": "70000",
+                "potongan": "30000",
+                "biaya_lain": "20000",
+                "keterangan_biaya": "Biaya QA Edit",
+                "catatan": "Invariant edit",
+                "product_id[]": [
+                    str(self.product_id),
+                    str(self.product_id),
+                ],
+                "qty[]": ["1", "1"],
+                "harga_jual[]": ["400000", "300000"],
+                "harga_modal[]": ["100000", "100000"],
+            },
+        )
+        self.assertEqual(
+            edit_response.status_code,
+            302,
+            edit_response.get_data(as_text=True),
+        )
+        self.assert_transaction_financial_invariants(transaction_id)
+
+        conn = database.get_connection()
+        edited = conn.execute(
+            "SELECT * FROM sales_transactions WHERE id = ?",
+            (transaction_id,),
+        ).fetchone()
+        conn.close()
+        self.assertEqual(edited["total_penjualan"], 700000)
+        self.assertEqual(edited["total_modal"], 200000)
+        self.assertEqual(edited["margin"], 500000)
+        self.assertEqual(edited["jumlah_diterima"], 600000)
+        self.assertEqual(edited["laba_bersih"], 380000)
 
     def test_ahsa_conversion_allocates_global_discount_to_details(self):
         conn = database.get_connection()
