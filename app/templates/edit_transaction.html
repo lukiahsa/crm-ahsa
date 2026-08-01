@@ -537,7 +537,7 @@
                         </div>
 
                         <div class="summary-row">
-                            <span>Margin</span>
+                            <span>Margin Kotor</span>
                             <strong id="margin">Rp 0</strong>
                         </div>
 
@@ -727,10 +727,10 @@
                 totalPenjualan - adminFee - potongan;
 
             const margin =
-                jumlahDiterima - totalModal;
+                totalPenjualan - totalModal;
 
             const labaBersih =
-                margin - biayaLain;
+                margin - adminFee - potongan - biayaLain;
 
             document.getElementById(
                 "total-penjualan"
