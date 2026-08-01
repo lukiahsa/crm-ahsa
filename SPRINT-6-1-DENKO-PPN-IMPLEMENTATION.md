@@ -184,9 +184,13 @@ Pemeriksaan tambahan:
 
 ## 10. Commit
 
-- `4cba243` — `feat(quotation): apply mandatory VAT to Denko quotations`
-- `a3cd269` — `test(quotation): cover mandatory Denko VAT rules`
-- `docs(quotation): document Sprint 6.1 Denko VAT` (commit dokumentasi ini)
+Histori commit yang dipublikasikan pada GitHub:
+
+- `8669f19` — `feat(quotation): apply mandatory VAT to Denko quotations`
+- `513d2ad` — `test(quotation): cover mandatory Denko VAT rules`
+- `228bbed` — `docs(quotation): document Sprint 6.1 Denko VAT`
+- `docs(quotation): record published hotfix history` (pembaruan metadata laporan;
+  SHA-nya adalah HEAD branch pada handoff akhir)
 
 ## 11. Langkah verifikasi sebelum merge
 
