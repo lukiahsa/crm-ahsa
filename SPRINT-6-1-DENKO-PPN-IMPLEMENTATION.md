@@ -114,7 +114,7 @@ Tidak ada kolom existing yang dihapus atau diganti. Migrasi belum dijalankan pad
 database production.
 
 Perbaikan financial invariant tidak memerlukan perubahan schema. Field detail
-transaction existing menyimpan `final_subtotal` dan margin setelah alokasi.
+transaction existing menyimpan `subtotal_akhir` dan margin setelah alokasi.
 
 ## 4. Helper baru dan fungsi berubah
 
@@ -126,7 +126,7 @@ transaction existing menyimpan `final_subtotal` dan margin setelah alokasi.
 - `get_effective_quotation_totals(quotation, identity)` menormalisasi data untuk
   detail/print serta menjaga hasil quotation legacy.
 - `calculate_quotation_item_subtotal(...)` menyatukan perhitungan subtotal item.
-- `allocate_global_discount_to_items(items, global_discount)` mengalokasikan
+- `allocate_global_discount(items, global_discount)` mengalokasikan
   diskon global secara proporsional, integer, dan deterministik.
 
 ### Fungsi/route berubah
