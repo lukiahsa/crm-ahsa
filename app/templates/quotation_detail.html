@@ -89,6 +89,10 @@ table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{border:1px so
 <div class="totalbox">
 <div class="line"><span>Subtotal</span><strong>Rp {{ "{:,.0f}".format(quotation["subtotal"] or 0).replace(",", ".") }}</strong></div>
 <div class="line"><span>Diskon</span><strong>Rp {{ "{:,.0f}".format(quotation["diskon"] or 0).replace(",", ".") }}</strong></div>
+{% if quotation["is_ppn"] %}
+<div class="line"><span>DPP</span><strong>Rp {{ "{:,.0f}".format(quotation["dpp"] or 0).replace(",", ".") }}</strong></div>
+<div class="line"><span>PPN {{ quotation["ppn_rate"] }}%</span><strong>Rp {{ "{:,.0f}".format(quotation["ppn_amount"] or 0).replace(",", ".") }}</strong></div>
+{% endif %}
 <div class="line grand"><span>GRAND TOTAL</span><strong>Rp {{ "{:,.0f}".format(quotation["grand_total"] or 0).replace(",", ".") }}</strong></div>
 </div>
 <form class="status" method="POST" action="{{ url_for('update_quotation_status', quotation_id=quotation['id']) }}">

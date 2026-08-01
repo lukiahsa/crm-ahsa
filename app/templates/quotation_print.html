@@ -92,7 +92,17 @@ table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{border:1px so
 </div>
 </div>
 <div>
-<div class="summary"><div class="sumrow"><strong>SUB TOTAL</strong><span>Rp {{ "{:,.0f}".format(quotation["subtotal"] or 0).replace(",", ".") }}</span></div>{% if show_discount %}<div class="sumrow"><strong>DISKON</strong><span>Rp {{ "{:,.0f}".format(quotation["diskon"] or 0).replace(",", ".") }}</span></div>{% endif %}<div class="sumrow grand"><strong>TOTAL</strong><span>Rp {{ "{:,.0f}".format(quotation["grand_total"] or 0).replace(",", ".") }}</span></div></div>
+<div class="summary">
+<div class="sumrow"><strong>SUBTOTAL</strong><span>Rp {{ "{:,.0f}".format(quotation["subtotal"] or 0).replace(",", ".") }}</span></div>
+{% if quotation["is_ppn"] %}
+<div class="sumrow"><strong>DISKON</strong><span>Rp {{ "{:,.0f}".format(quotation["diskon"] or 0).replace(",", ".") }}</span></div>
+<div class="sumrow"><strong>DPP</strong><span>Rp {{ "{:,.0f}".format(quotation["dpp"] or 0).replace(",", ".") }}</span></div>
+<div class="sumrow"><strong>PPN {{ quotation["ppn_rate"] }}%</strong><span>Rp {{ "{:,.0f}".format(quotation["ppn_amount"] or 0).replace(",", ".") }}</span></div>
+{% elif show_discount %}
+<div class="sumrow"><strong>DISKON</strong><span>Rp {{ "{:,.0f}".format(quotation["diskon"] or 0).replace(",", ".") }}</span></div>
+{% endif %}
+<div class="sumrow grand"><strong>TOTAL</strong><span>Rp {{ "{:,.0f}".format(quotation["grand_total"] or 0).replace(",", ".") }}</span></div>
+</div>
 {% if show_qr or show_signature %}
 <div class="sign" style="{% if not show_qr %}grid-template-columns:1fr;{% elif not show_signature %}grid-template-columns:1fr;{% endif %}">
 {% if show_qr %}<div class="qr">{% if qr_code_data_uri %}<img src="{{ qr_code_data_uri }}"><div>Verifikasi Penawaran</div>{% endif %}</div>{% endif %}

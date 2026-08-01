@@ -11,22 +11,23 @@
 table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{border:1px solid #d8e1e7;padding:8px;vertical-align:top}th{background:#0b4388;color:#fff;font-size:11px}.scroll{overflow:auto}.summary{display:grid;grid-template-columns:1fr 315px;gap:18px}.totals{border:1px solid #d4dfe7;border-radius:8px;padding:12px}.line{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #e4eaee}.line:last-child{border:0;color:#0b4388;font-size:16px}.actions{display:flex;justify-content:flex-end;gap:9px}
 .preset{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}.preset button{padding:7px 10px;border:1px solid #bfd0dd;background:#f3f7fa;border-radius:999px;cursor:pointer;font-size:11px;font-weight:700}
 .identity-options{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.identity-option{display:flex;align-items:flex-start;gap:10px;border:1px solid #cad6df;border-radius:8px;padding:12px;background:#f8fafc;cursor:pointer}.identity-option input{width:auto;margin-top:2px;accent-color:#0b4388}.identity-option strong,.identity-option small{display:block}.identity-option small{font-weight:400;color:#687580;margin-top:4px;line-height:1.35}
+.tax-notice{margin-top:10px;padding:10px 12px;border:1px solid #b9cbe0;border-radius:7px;background:#edf5ff;color:#174b7a;font-size:12px;font-weight:800}.tax-notice.ppn{border-color:#efc45c;background:#fff5d8;color:#704d00}
 @media(max-width:800px){.grid,.summary{grid-template-columns:1fr}.full{grid-column:auto}table{min-width:900px}.head{align-items:flex-start;flex-direction:column}}
 </style>
 </head>
 <body>
 <main class="container">
-<div class="head"><div><h1>Buat Penawaran Baru</h1><div class="sub">PPN belum digunakan karena perusahaan belum PKP.</div></div><a class="btn gray" href="{{ url_for('quotations') }}">Kembali</a></div>
+<div class="head"><div><h1>Buat Penawaran Baru</h1><div class="sub">Aturan PPN diterapkan otomatis berdasarkan identity quotation.</div></div><a class="btn gray" href="{{ url_for('quotations') }}">Kembali</a></div>
 <form method="POST">
 <section class="card"><div class="title">Informasi Penawaran</div>
 <div><label>Identity</label><div class="identity-options">
 {% for identity in identities %}
 <label class="identity-option">
-<input type="radio" name="identity_id" value="{{ identity['id'] }}" {% if identity['id'] == default_identity_id %}checked{% endif %} required>
-<span><strong>{{ identity['nama_perusahaan'] }}</strong><small>{% if identity['identity_type'] == 'FULL' %}Quotation dapat dikonversi ke transaksi.{% else %}Quotation PDF saja; tidak dapat dikonversi ke transaksi.{% endif %}</small></span>
+<input type="radio" name="identity_id" value="{{ identity['id'] }}" data-identity-type="{{ identity['identity_type'] }}" {% if identity['id'] == default_identity_id %}checked{% endif %} required>
+<span><strong>{{ identity['nama_perusahaan'] }}</strong><small>{% if identity['identity_type'] == 'FULL' %}Tanpa PPN. Quotation dapat dikonversi ke transaksi.{% else %}PPN 11% diterapkan otomatis. Quotation PDF saja; tidak dapat dikonversi ke transaksi.{% endif %}</small></span>
 </label>
 {% endfor %}
-</div></div>
+</div><div id="taxNotice" class="tax-notice" role="status"></div></div>
 <div class="grid" style="margin-top:15px">
 <div><label>Customer</label><select name="customer_id" required><option value="">Pilih customer</option>
 {% for customer in customers %}<option value="{{ customer['id'] }}" >{{ customer['nama'] }}{% if customer['instansi'] %} — {{ customer['instansi'] }}{% endif %}</option>{% endfor %}
@@ -54,6 +55,8 @@ Penawaran berlaku sampai tanggal yang tercantum.</textarea></div>
 <div class="totals">
 <div class="line"><span>Subtotal</span><strong id="subtotal">Rp 0</strong></div>
 <div class="line"><span>Diskon Global</span><input style="width:135px;text-align:right" id="globalDiscount" name="diskon" value="0"></div>
+<div class="line" id="dppRow" hidden><span>DPP</span><strong id="dpp">Rp 0</strong></div>
+<div class="line" id="ppnRow" hidden><span>PPN 11%</span><strong id="ppn">Rp 0</strong></div>
 <div class="line"><span>Grand Total</span><strong id="grand">Rp 0</strong></div>
 </div></section>
 <div class="actions"><a class="btn gray" href="{{ url_for('quotations') }}">Batal</a><button class="btn green" type="submit">Simpan Penawaran</button></div>
@@ -72,12 +75,13 @@ Penawaran berlaku sampai tanggal yang tercantum.</textarea></div>
 </tr></template>
 
 <script>
-const rows=document.getElementById("rows"),tpl=document.getElementById("rowTemplate"),globalDiscount=document.getElementById("globalDiscount");
+const rows=document.getElementById("rows"),tpl=document.getElementById("rowTemplate"),globalDiscount=document.getElementById("globalDiscount"),identityRadios=document.querySelectorAll('input[name="identity_id"]'),taxNotice=document.getElementById("taxNotice"),dppRow=document.getElementById("dppRow"),ppnRow=document.getElementById("ppnRow");
 function val(v){return Number(String(v||"0").replace(/[^0-9]/g,""))||0}function rp(v){return"Rp "+Math.max(v,0).toLocaleString("id-ID")}
-function calc(){let subtotal=0;rows.querySelectorAll("tr").forEach(r=>{let total=Math.max(val(r.querySelector(".qty").value)*val(r.querySelector(".price").value)-val(r.querySelector(".discount").value),0);r.querySelector(".rowTotal").textContent=rp(total);subtotal+=total});document.getElementById("subtotal").textContent=rp(subtotal);document.getElementById("grand").textContent=rp(Math.max(subtotal-val(globalDiscount.value),0))}
+function isDenkoTax(){let selected=document.querySelector('input[name="identity_id"]:checked');return selected&&selected.dataset.identityType==="QUOTATION_ONLY"}
+function calc(){let subtotal=0;rows.querySelectorAll("tr").forEach(r=>{let total=Math.max(val(r.querySelector(".qty").value)*val(r.querySelector(".price").value)-val(r.querySelector(".discount").value),0);r.querySelector(".rowTotal").textContent=rp(total);subtotal+=total});let dpp=Math.max(subtotal-val(globalDiscount.value),0),withPpn=isDenkoTax(),ppn=withPpn?Math.round(dpp*11/100):0;document.getElementById("subtotal").textContent=rp(subtotal);document.getElementById("dpp").textContent=rp(dpp);document.getElementById("ppn").textContent=rp(ppn);document.getElementById("grand").textContent=rp(dpp+ppn);dppRow.hidden=!withPpn;ppnRow.hidden=!withPpn;taxNotice.classList.toggle("ppn",withPpn);taxNotice.textContent=withPpn?"PPN 11% diterapkan otomatis dan tidak dapat dinonaktifkan.":"Tanpa PPN."}
 function bind(r){r.querySelector(".product").addEventListener("change",e=>{let o=e.target.options[e.target.selectedIndex];r.querySelector(".price").value=o.dataset.price||0;calc()});r.querySelectorAll("input").forEach(i=>i.addEventListener("input",calc));r.querySelector(".remove").addEventListener("click",()=>{if(rows.children.length===1)return alert("Minimal satu produk.");r.remove();calc()})}
 function add(data={}){let fragment=tpl.content.cloneNode(true);let r=fragment.querySelector("tr");rows.appendChild(fragment);bind(r);if(data.product_id){r.querySelector(".product").value=String(data.product_id)}r.querySelector(".qty").value=data.qty||1;r.querySelector(".price").value=data.harga_satuan||0;r.querySelector(".discount").value=data.diskon_item||0;calc()}
-document.getElementById("addRow").addEventListener("click",()=>add());globalDiscount.addEventListener("input",calc);
+document.getElementById("addRow").addEventListener("click",()=>add());globalDiscount.addEventListener("input",calc);identityRadios.forEach(r=>r.addEventListener("change",calc));
 const presets={
 tempat_sampah:{catatan:"Produk tempat sampah sesuai spesifikasi yang tercantum pada penawaran.",terms:"Harga belum termasuk ongkos kirim apabila tidak disebutkan.\nWarna dan ketersediaan stok mengikuti konfirmasi terakhir.\nLead time mengikuti jumlah pesanan dan ketersediaan barang.\nGaransi mengikuti ketentuan pabrikan."},
 tangga:{catatan:"Produk tangga sesuai merk, ukuran, steps dan varian yang tercantum.",terms:"Harga belum termasuk ongkos kirim apabila tidak disebutkan.\nSpesifikasi tinggi dan jumlah steps mengikuti produk yang dipilih.\nGaransi mengikuti ketentuan pabrikan.\nPenawaran berlaku sampai tanggal yang tercantum."},

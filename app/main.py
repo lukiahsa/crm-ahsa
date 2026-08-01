@@ -130,6 +130,7 @@ QUOTATION_STATUSES = (
 
 IDENTITY_TYPE_FULL = "FULL"
 IDENTITY_TYPE_QUOTATION_ONLY = "QUOTATION_ONLY"
+QUOTATION_ONLY_PPN_RATE = 11
 
 DOCUMENT_TYPE_QUOTATION = "QUOTATION"
 DOCUMENT_TYPE_TRANSACTION = "TRANSACTION"
@@ -702,6 +703,77 @@ def get_effective_identity(
     finally:
         if close_after:
             conn.close()
+
+
+def get_effective_tax_settings(identity):
+    """Tentukan aturan PPN quotation dari identity_type."""
+    identity_type = identity["identity_type"] if identity else None
+
+    if identity_type == IDENTITY_TYPE_QUOTATION_ONLY:
+        return {
+            "is_ppn": 1,
+            "ppn_rate": QUOTATION_ONLY_PPN_RATE,
+        }
+
+    if identity_type == IDENTITY_TYPE_FULL:
+        return {
+            "is_ppn": 0,
+            "ppn_rate": 0,
+        }
+
+    raise ValueError("Identity quotation tidak mempunyai aturan PPN.")
+
+
+def calculate_quotation_totals(
+    subtotal,
+    discount,
+    identity,
+    *,
+    preserve_legacy_no_ppn=False,
+):
+    """Hitung total quotation dengan aritmetika Rupiah berbasis integer."""
+    normalized_subtotal = max(int(subtotal or 0), 0)
+    normalized_discount = max(int(discount or 0), 0)
+    tax_settings = get_effective_tax_settings(identity)
+
+    if preserve_legacy_no_ppn:
+        tax_settings = {
+            "is_ppn": 0,
+            "ppn_rate": 0,
+        }
+
+    dpp = max(normalized_subtotal - normalized_discount, 0)
+    ppn_rate = int(tax_settings["ppn_rate"])
+    ppn_amount = 0
+
+    if tax_settings["is_ppn"]:
+        # Pembulatan half-up ke Rupiah terdekat tanpa operasi float.
+        ppn_amount = (dpp * ppn_rate + 50) // 100
+
+    return {
+        "subtotal": normalized_subtotal,
+        "discount": normalized_discount,
+        "dpp": dpp,
+        "is_ppn": int(bool(tax_settings["is_ppn"])),
+        "ppn_rate": ppn_rate,
+        "ppn_amount": ppn_amount,
+        "grand_total": dpp + ppn_amount,
+    }
+
+
+def get_effective_quotation_totals(quotation, identity):
+    """Normalisasi snapshot total untuk display, termasuk quotation legacy."""
+    preserve_legacy_no_ppn = bool(
+        identity["identity_type"] == IDENTITY_TYPE_QUOTATION_ONLY
+        and not quotation["is_ppn"]
+    )
+
+    return calculate_quotation_totals(
+        quotation["subtotal"],
+        quotation["diskon"],
+        identity,
+        preserve_legacy_no_ppn=preserve_legacy_no_ppn,
+    )
 
 
 def get_effective_quotation_print_settings(quotation, identity):
@@ -3292,6 +3364,14 @@ def quotations():
     )
 
 
+def calculate_quotation_item_subtotal(qty, unit_price, item_discount):
+    """Hitung subtotal item quotation sebagai integer non-negatif."""
+    return max(
+        int(qty or 0) * int(unit_price or 0) - int(item_discount or 0),
+        0,
+    )
+
+
 def prepare_quotation_items(conn, form):
     product_ids = form.getlist("product_id[]")
     qty_values = form.getlist("qty[]")
@@ -3342,8 +3422,11 @@ def prepare_quotation_items(conn, form):
                 f"Produk baris ke-{nomor_baris} tidak ditemukan."
             )
 
-        nilai_kotor = qty * harga_satuan
-        subtotal_item = max(nilai_kotor - diskon_item, 0)
+        subtotal_item = calculate_quotation_item_subtotal(
+            qty,
+            harga_satuan,
+            diskon_item,
+        )
         subtotal_penawaran += subtotal_item
 
         prepared_items.append(
@@ -3466,9 +3549,10 @@ def add_quotation():
                 prepare_quotation_items(conn, request.form)
             )
 
-            grand_total = max(
-                subtotal_penawaran - diskon_global,
-                0,
+            totals = calculate_quotation_totals(
+                subtotal_penawaran,
+                diskon_global,
+                identity,
             )
 
             nomor_penawaran = generate_document_number(
@@ -3491,12 +3575,18 @@ def add_quotation():
                     revisi,
                     subtotal,
                     diskon,
+                    is_ppn,
+                    ppn_rate,
+                    dpp,
+                    ppn_amount,
                     grand_total,
                     catatan,
                     syarat_ketentuan,
                     identity_id
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                )
                 """,
                 (
                     nomor_penawaran,
@@ -3506,9 +3596,13 @@ def add_quotation():
                     sales or None,
                     "Draft",
                     0,
-                    subtotal_penawaran,
-                    diskon_global,
-                    grand_total,
+                    totals["subtotal"],
+                    totals["discount"],
+                    totals["is_ppn"],
+                    totals["ppn_rate"],
+                    totals["dpp"],
+                    totals["ppn_amount"],
+                    totals["grand_total"],
                     catatan or None,
                     syarat_ketentuan or None,
                     identity["id"],
@@ -3647,9 +3741,10 @@ def edit_quotation(quotation_id):
             prepared_items, subtotal_penawaran = (
                 prepare_quotation_items(conn, request.form)
             )
-            grand_total = max(
-                subtotal_penawaran - diskon_global,
-                0,
+            totals = calculate_quotation_totals(
+                subtotal_penawaran,
+                diskon_global,
+                identity,
             )
 
             conn.execute(
@@ -3662,6 +3757,10 @@ def edit_quotation(quotation_id):
                     sales = ?,
                     subtotal = ?,
                     diskon = ?,
+                    is_ppn = ?,
+                    ppn_rate = ?,
+                    dpp = ?,
+                    ppn_amount = ?,
                     grand_total = ?,
                     catatan = ?,
                     syarat_ketentuan = ?,
@@ -3679,9 +3778,13 @@ def edit_quotation(quotation_id):
                     tanggal,
                     berlaku_sampai or None,
                     sales or None,
-                    subtotal_penawaran,
-                    diskon_global,
-                    grand_total,
+                    totals["subtotal"],
+                    totals["discount"],
+                    totals["is_ppn"],
+                    totals["ppn_rate"],
+                    totals["dpp"],
+                    totals["ppn_amount"],
+                    totals["grand_total"],
                     catatan or None,
                     syarat_ketentuan or None,
                     quotation_id,
@@ -3803,6 +3906,12 @@ def quotation_detail(quotation_id):
     ).replace(",", ".")
 
     quotation_data = dict(quotation)
+    quotation_totals = get_effective_quotation_totals(
+        quotation,
+        identity,
+    )
+    quotation_data.update(quotation_totals)
+    quotation_data["diskon"] = quotation_totals["discount"]
     quotation_data["tanggal_format"] = (
         format_tanggal_indonesia(quotation["tanggal"])
     )
@@ -4022,6 +4131,12 @@ def print_quotation(quotation_id):
     conn.close()
 
     quotation_data = dict(quotation)
+    quotation_totals = get_effective_quotation_totals(
+        quotation,
+        identity,
+    )
+    quotation_data.update(quotation_totals)
+    quotation_data["diskon"] = quotation_totals["discount"]
     quotation_data["tanggal_format"] = (
         format_tanggal_indonesia(quotation["tanggal"])
     )
@@ -4032,7 +4147,7 @@ def print_quotation(quotation_id):
     )
     quotation_data["terbilang"] = (
         angka_ke_terbilang(
-            int(quotation["grand_total"] or 0)
+            quotation_totals["grand_total"]
         )
         + " Rupiah"
     )
@@ -4050,7 +4165,7 @@ def print_quotation(quotation_id):
             f"{identity['nama_brand']}\n"
             f"Penawaran: {quotation['nomor_penawaran']}\n"
             f"Customer: {quotation['customer_nama'] or '-'}\n"
-            f"Total: Rp {int(quotation['grand_total'] or 0):,.0f}\n"
+            f"Total: Rp {quotation_totals['grand_total']:,.0f}\n"
             f"Status: {quotation['status']}\n"
             f"URL: {quotation_url}"
         ).replace(",", ".")
@@ -4059,7 +4174,7 @@ def print_quotation(quotation_id):
     show_discount = print_settings["show_discount"]
     auto_hide_zero = bool(quotation["auto_hide_zero"])
 
-    if auto_hide_zero and int(quotation["diskon"] or 0) == 0:
+    if auto_hide_zero and quotation_totals["discount"] == 0:
         show_discount = False
 
     return render_template(
@@ -4205,6 +4320,27 @@ def duplicate_quotation(quotation_id):
     ).fetchall()
 
     try:
+        duplicated_items = []
+        duplicated_subtotal = 0
+
+        for item in items:
+            duplicated_item = dict(item)
+            duplicated_item["subtotal"] = (
+                calculate_quotation_item_subtotal(
+                    item["qty"],
+                    item["harga_satuan"],
+                    item["diskon_item"],
+                )
+            )
+            duplicated_subtotal += duplicated_item["subtotal"]
+            duplicated_items.append(duplicated_item)
+
+        totals = calculate_quotation_totals(
+            duplicated_subtotal,
+            source["diskon"],
+            source_identity,
+        )
+
         nomor_baru = generate_document_number(
             conn=conn,
             prefix="QT",
@@ -4225,6 +4361,10 @@ def duplicate_quotation(quotation_id):
                 revisi,
                 subtotal,
                 diskon,
+                is_ppn,
+                ppn_rate,
+                dpp,
+                ppn_amount,
                 grand_total,
                 catatan,
                 syarat_ketentuan,
@@ -4240,7 +4380,7 @@ def duplicate_quotation(quotation_id):
                 auto_hide_zero
             )
             VALUES (
-                ?, ?, ?, ?, ?, 'Draft', 0, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, 'Draft', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )
             """,
@@ -4250,9 +4390,13 @@ def duplicate_quotation(quotation_id):
                 source["tanggal"],
                 source["berlaku_sampai"],
                 source["sales"],
-                source["subtotal"],
-                source["diskon"],
-                source["grand_total"],
+                totals["subtotal"],
+                totals["discount"],
+                totals["is_ppn"],
+                totals["ppn_rate"],
+                totals["dpp"],
+                totals["ppn_amount"],
+                totals["grand_total"],
                 source["catatan"],
                 source["syarat_ketentuan"],
                 source_identity["id"],
@@ -4270,7 +4414,7 @@ def duplicate_quotation(quotation_id):
 
         new_id = cursor.lastrowid
 
-        for item in items:
+        for item in duplicated_items:
             conn.execute(
                 """
                 INSERT INTO sales_quotation_items (
