@@ -95,23 +95,37 @@ class MultiIdentityRegressionTest(unittest.TestCase):
         self.assertIsNotNone(row)
         return row["id"]
 
-    def create_quotation(self, identity_type):
+    def create_quotation(
+        self,
+        identity_type,
+        *,
+        unit_price=100000,
+        global_discount=0,
+        item_discount=0,
+        qty=1,
+        extra_data=None,
+    ):
+        data = {
+            "identity_id": str(self.identity_id(identity_type)),
+            "customer_id": str(self.customer_id),
+            "tanggal": "2026-08-01",
+            "berlaku_sampai": "2026-08-15",
+            "sales": "QA Engineer",
+            "diskon": str(global_discount),
+            "catatan": "Regression test",
+            "syarat_ketentuan": "Syarat regression test",
+            "product_id[]": [str(self.product_id)],
+            "qty[]": [str(qty)],
+            "harga_satuan[]": [str(unit_price)],
+            "diskon_item[]": [str(item_discount)],
+        }
+
+        if extra_data:
+            data.update(extra_data)
+
         response = self.client.post(
             "/quotations/add",
-            data={
-                "identity_id": str(self.identity_id(identity_type)),
-                "customer_id": str(self.customer_id),
-                "tanggal": "2026-08-01",
-                "berlaku_sampai": "2026-08-15",
-                "sales": "QA Engineer",
-                "diskon": "0",
-                "catatan": "Regression test",
-                "syarat_ketentuan": "Syarat regression test",
-                "product_id[]": [str(self.product_id)],
-                "qty[]": ["1"],
-                "harga_satuan[]": ["100000"],
-                "diskon_item[]": ["0"],
-            },
+            data=data,
         )
         self.assertEqual(
             response.status_code,
@@ -351,6 +365,247 @@ class MultiIdentityRegressionTest(unittest.TestCase):
         self.assertEqual(denko["allow_qr"], 0)
         self.assertEqual(denko["allow_website_footer"], 0)
         self.assertEqual(denko["allow_transaction_conversion"], 0)
+
+    def test_quotation_tax_rules_ignore_request_tampering(self):
+        ahsa_id = self.create_quotation(
+            main.IDENTITY_TYPE_FULL,
+            unit_price=10000000,
+            extra_data={
+                "is_ppn": "1",
+                "ppn_rate": "99",
+            },
+        )
+        denko_id = self.create_quotation(
+            main.IDENTITY_TYPE_QUOTATION_ONLY,
+            unit_price=10000000,
+            extra_data={
+                "is_ppn": "0",
+                "ppn_rate": "7",
+            },
+        )
+
+        edit_response = self.client.post(
+            f"/quotations/{denko_id}/edit",
+            data={
+                "identity_id": str(
+                    self.identity_id(main.IDENTITY_TYPE_QUOTATION_ONLY)
+                ),
+                "customer_id": str(self.customer_id),
+                "tanggal": "2026-08-01",
+                "berlaku_sampai": "2026-08-15",
+                "sales": "QA Engineer",
+                "diskon": "0",
+                "is_ppn": "0",
+                "ppn_rate": "22",
+                "catatan": "Regression test",
+                "syarat_ketentuan": "Syarat regression test",
+                "product_id[]": [str(self.product_id)],
+                "qty[]": ["1"],
+                "harga_satuan[]": ["10000000"],
+                "diskon_item[]": ["0"],
+            },
+        )
+        self.assertEqual(edit_response.status_code, 302)
+
+        conn = database.get_connection()
+        ahsa = conn.execute(
+            "SELECT * FROM sales_quotations WHERE id = ?",
+            (ahsa_id,),
+        ).fetchone()
+        denko = conn.execute(
+            "SELECT * FROM sales_quotations WHERE id = ?",
+            (denko_id,),
+        ).fetchone()
+        denko_identity = conn.execute(
+            """
+            SELECT *
+            FROM company_identities
+            WHERE identity_type = ?
+            """,
+            (main.IDENTITY_TYPE_QUOTATION_ONLY,),
+        ).fetchone()
+        conn.close()
+
+        self.assertEqual(ahsa["is_ppn"], 0)
+        self.assertEqual(ahsa["ppn_rate"], 0)
+        self.assertEqual(ahsa["ppn_amount"], 0)
+        self.assertEqual(ahsa["dpp"], 10000000)
+        self.assertEqual(ahsa["grand_total"], 10000000)
+
+        self.assertEqual(denko["subtotal"], 10000000)
+        self.assertEqual(denko["diskon"], 0)
+        self.assertEqual(denko["is_ppn"], 1)
+        self.assertEqual(denko["ppn_rate"], 11)
+        self.assertEqual(denko["dpp"], 10000000)
+        self.assertEqual(denko["ppn_amount"], 1100000)
+        self.assertEqual(denko["grand_total"], 11100000)
+
+        rounded = main.calculate_quotation_totals(
+            105,
+            0,
+            denko_identity,
+        )
+        self.assertIsInstance(rounded["ppn_amount"], int)
+        self.assertEqual(rounded["ppn_amount"], 12)
+
+    def test_denko_discount_pdf_and_terbilang_use_taxed_total(self):
+        denko_id = self.create_quotation(
+            main.IDENTITY_TYPE_QUOTATION_ONLY,
+            unit_price=10000000,
+            global_discount=1000000,
+        )
+        ahsa_id = self.create_quotation(
+            main.IDENTITY_TYPE_FULL,
+            unit_price=10000000,
+            global_discount=1000000,
+        )
+
+        conn = database.get_connection()
+        denko = conn.execute(
+            "SELECT * FROM sales_quotations WHERE id = ?",
+            (denko_id,),
+        ).fetchone()
+        conn.close()
+
+        self.assertEqual(denko["dpp"], 9000000)
+        self.assertEqual(denko["ppn_amount"], 990000)
+        self.assertEqual(denko["grand_total"], 9990000)
+
+        denko_html = self.client.get(
+            f"/quotations/{denko_id}/print"
+        ).get_data(as_text=True)
+        ahsa_html = self.client.get(
+            f"/quotations/{ahsa_id}/print"
+        ).get_data(as_text=True)
+
+        self.assertIn("<strong>DPP</strong>", denko_html)
+        self.assertIn("<strong>PPN 11%</strong>", denko_html)
+        self.assertIn("Rp 9.000.000", denko_html)
+        self.assertIn("Rp 990.000", denko_html)
+        self.assertIn("Rp 9.990.000", denko_html)
+        self.assertIn(
+            "Sembilan Juta Sembilan Ratus Sembilan Puluh Ribu Rupiah",
+            denko_html,
+        )
+        self.assertNotIn("<strong>DPP</strong>", ahsa_html)
+        self.assertNotIn("<strong>PPN 11%</strong>", ahsa_html)
+
+    def test_duplicate_denko_recalculates_mandatory_tax(self):
+        denko_id = self.create_quotation(
+            main.IDENTITY_TYPE_QUOTATION_ONLY,
+            unit_price=10000000,
+        )
+
+        conn = database.get_connection()
+        conn.execute(
+            """
+            UPDATE sales_quotations
+            SET is_ppn = 0,
+                ppn_rate = 0,
+                dpp = 0,
+                ppn_amount = 0,
+                grand_total = 10000000
+            WHERE id = ?
+            """,
+            (denko_id,),
+        )
+        conn.commit()
+        conn.close()
+
+        response = self.client.post(
+            f"/quotations/{denko_id}/duplicate"
+        )
+        self.assertEqual(response.status_code, 302)
+        duplicate_id = int(response.headers["Location"].split("/")[-2])
+
+        conn = database.get_connection()
+        duplicate = conn.execute(
+            """
+            SELECT
+                sales_quotations.*,
+                company_identities.identity_type
+            FROM sales_quotations
+            JOIN company_identities
+                ON sales_quotations.identity_id = company_identities.id
+            WHERE sales_quotations.id = ?
+            """,
+            (duplicate_id,),
+        ).fetchone()
+        conn.close()
+
+        self.assertEqual(
+            duplicate["identity_type"],
+            main.IDENTITY_TYPE_QUOTATION_ONLY,
+        )
+        self.assertEqual(duplicate["is_ppn"], 1)
+        self.assertEqual(duplicate["ppn_rate"], 11)
+        self.assertEqual(duplicate["dpp"], 10000000)
+        self.assertEqual(duplicate["ppn_amount"], 1100000)
+        self.assertEqual(duplicate["grand_total"], 11100000)
+
+    def test_tax_migration_is_idempotent_and_preserves_legacy_total(self):
+        denko_identity_id = self.identity_id(
+            main.IDENTITY_TYPE_QUOTATION_ONLY
+        )
+        conn = database.get_connection()
+        legacy_id = conn.execute(
+            """
+            INSERT INTO sales_quotations (
+                nomor_penawaran,
+                customer_id,
+                tanggal,
+                subtotal,
+                diskon,
+                grand_total,
+                identity_id
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "QT-DENKO-BEFORE-PPN",
+                self.customer_id,
+                "2026-07-31",
+                10000000,
+                0,
+                10000000,
+                denko_identity_id,
+            ),
+        ).lastrowid
+        conn.commit()
+        conn.close()
+
+        database.create_tables()
+        database.create_tables()
+
+        conn = database.get_connection()
+        legacy = conn.execute(
+            "SELECT * FROM sales_quotations WHERE id = ?",
+            (legacy_id,),
+        ).fetchone()
+        columns = {
+            row["name"]
+            for row in conn.execute(
+                "PRAGMA table_info(sales_quotations)"
+            ).fetchall()
+        }
+        integrity = conn.execute("PRAGMA integrity_check").fetchone()[0]
+        conn.close()
+
+        self.assertTrue(
+            {"is_ppn", "ppn_rate", "dpp", "ppn_amount"}.issubset(columns)
+        )
+        self.assertEqual(legacy["is_ppn"], 0)
+        self.assertEqual(legacy["ppn_rate"], 0)
+        self.assertEqual(legacy["dpp"], 10000000)
+        self.assertEqual(legacy["ppn_amount"], 0)
+        self.assertEqual(legacy["grand_total"], 10000000)
+        self.assertEqual(integrity, "ok")
+
+        legacy_html = self.client.get(
+            f"/quotations/{legacy_id}/print"
+        ).get_data(as_text=True)
+        self.assertNotIn("<strong>PPN 11%</strong>", legacy_html)
+        self.assertIn("Rp 10.000.000", legacy_html)
 
     def test_ahsa_quotation_converts_to_transaction(self):
         quotation_id, transaction_id = self.convert_ahsa_quotation()
