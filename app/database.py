@@ -92,7 +92,85 @@ def create_tables():
             sumber TEXT,
             status TEXT,
             catatan TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            nama_asli TEXT,
+            nama_normalisasi TEXT,
+            whatsapp_raw TEXT,
+            whatsapp_normalized TEXT,
+            email_raw TEXT,
+            email TEXT,
+            alamat TEXT,
+            produk_existing TEXT,
+            klasifikasi_produk TEXT,
+            import_batch_id TEXT,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+
+    # Migration additive untuk metadata import customer. Kolom lama tetap
+    # dipertahankan sebagai compatibility layer bagi seluruh workflow ERP.
+    for column_name, column_definition in (
+        ("nama_asli", "TEXT"),
+        ("nama_normalisasi", "TEXT"),
+        ("whatsapp_raw", "TEXT"),
+        ("whatsapp_normalized", "TEXT"),
+        ("email_raw", "TEXT"),
+        ("email", "TEXT"),
+        ("alamat", "TEXT"),
+        ("produk_existing", "TEXT"),
+        ("klasifikasi_produk", "TEXT"),
+        ("import_batch_id", "TEXT"),
+        ("updated_at", "TIMESTAMP"),
+    ):
+        ensure_column(
+            conn,
+            "customers",
+            column_name,
+            column_definition,
+        )
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS customer_import_batches (
+            id TEXT PRIMARY KEY,
+            filename TEXT NOT NULL,
+            file_sha256 TEXT NOT NULL,
+            total_rows INTEGER NOT NULL DEFAULT 0,
+            unique_customers INTEGER NOT NULL DEFAULT 0,
+            created_count INTEGER NOT NULL DEFAULT 0,
+            merged_count INTEGER NOT NULL DEFAULT 0,
+            skipped_count INTEGER NOT NULL DEFAULT 0,
+            warning_count INTEGER NOT NULL DEFAULT 0,
+            error_count INTEGER NOT NULL DEFAULT 0,
+            report_markdown TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            completed_at TIMESTAMP
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS customer_import_changes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            batch_id TEXT NOT NULL,
+            customer_id INTEGER,
+            action TEXT NOT NULL,
+            match_method TEXT,
+            source_rows TEXT,
+            changed_fields TEXT,
+            before_values TEXT,
+            after_values TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+            FOREIGN KEY (batch_id)
+                REFERENCES customer_import_batches (id)
+                ON DELETE CASCADE,
+
+            FOREIGN KEY (customer_id)
+                REFERENCES customers (id)
+                ON DELETE SET NULL
         )
         """
     )
