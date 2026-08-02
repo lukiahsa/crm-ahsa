@@ -103,6 +103,7 @@ def create_tables():
             produk_existing TEXT,
             klasifikasi_produk TEXT,
             import_batch_id TEXT,
+            status_aktif INTEGER NOT NULL DEFAULT 1,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """
@@ -121,6 +122,7 @@ def create_tables():
         ("produk_existing", "TEXT"),
         ("klasifikasi_produk", "TEXT"),
         ("import_batch_id", "TEXT"),
+        ("status_aktif", "INTEGER NOT NULL DEFAULT 1"),
         ("updated_at", "TIMESTAMP"),
     ):
         ensure_column(
@@ -129,6 +131,25 @@ def create_tables():
             column_name,
             column_definition,
         )
+
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_customers_quotation_name
+        ON customers (nama COLLATE NOCASE)
+        """
+    )
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_customers_quotation_phone
+        ON customers (whatsapp_normalized)
+        """
+    )
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_customers_quotation_email
+        ON customers (email COLLATE NOCASE)
+        """
+    )
 
     cursor.execute(
         """
@@ -445,6 +466,19 @@ def create_tables():
         "products",
         "updated_at",
         "TIMESTAMP",
+    )
+
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_products_quotation_code
+        ON products (kode_produk COLLATE NOCASE)
+        """
+    )
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_products_quotation_name
+        ON products (nama_produk COLLATE NOCASE)
+        """
     )
 
     # Memindahkan data kategori lama ke master referensi.
@@ -2494,6 +2528,16 @@ def create_tables():
             identity_id INTEGER,
             converted_transaction_id INTEGER,
 
+            customer_nama_snapshot TEXT,
+            customer_perusahaan_snapshot TEXT,
+            customer_pic_snapshot TEXT,
+            customer_whatsapp_snapshot TEXT,
+            customer_email_snapshot TEXT,
+            customer_alamat_snapshot TEXT,
+            customer_kota_snapshot TEXT,
+            customer_status_snapshot TEXT,
+            customer_minat_snapshot TEXT,
+
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
@@ -2643,6 +2687,23 @@ def create_tables():
         "converted_transaction_id",
         "INTEGER",
     )
+    for column_name in (
+        "customer_nama_snapshot",
+        "customer_perusahaan_snapshot",
+        "customer_pic_snapshot",
+        "customer_whatsapp_snapshot",
+        "customer_email_snapshot",
+        "customer_alamat_snapshot",
+        "customer_kota_snapshot",
+        "customer_status_snapshot",
+        "customer_minat_snapshot",
+    ):
+        ensure_column(
+            conn,
+            "sales_quotations",
+            column_name,
+            "TEXT",
+        )
     ensure_column(conn, "sales_quotations", "created_at", "TIMESTAMP")
     ensure_column(conn, "sales_quotations", "updated_at", "TIMESTAMP")
 
@@ -2750,6 +2811,11 @@ def create_tables():
             warna_snapshot TEXT,
             ukuran_snapshot TEXT,
             satuan_snapshot TEXT,
+            subkategori_snapshot TEXT,
+            jenis_produk_snapshot TEXT,
+            steps_snapshot TEXT,
+            spesifikasi_snapshot TEXT,
+            harga_modal_snapshot INTEGER,
 
             qty INTEGER NOT NULL DEFAULT 1,
             harga_satuan INTEGER NOT NULL DEFAULT 0,
@@ -2818,6 +2884,36 @@ def create_tables():
         "sales_quotation_items",
         "satuan_snapshot",
         "TEXT",
+    )
+    ensure_column(
+        conn,
+        "sales_quotation_items",
+        "subkategori_snapshot",
+        "TEXT",
+    )
+    ensure_column(
+        conn,
+        "sales_quotation_items",
+        "jenis_produk_snapshot",
+        "TEXT",
+    )
+    ensure_column(
+        conn,
+        "sales_quotation_items",
+        "steps_snapshot",
+        "TEXT",
+    )
+    ensure_column(
+        conn,
+        "sales_quotation_items",
+        "spesifikasi_snapshot",
+        "TEXT",
+    )
+    ensure_column(
+        conn,
+        "sales_quotation_items",
+        "harga_modal_snapshot",
+        "INTEGER",
     )
     ensure_column(
         conn,
