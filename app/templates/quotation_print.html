@@ -51,7 +51,7 @@ table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{border:1px so
 {% endif %}
 
 <section class="customer {% if not show_bank or identity['identity_type'] == 'QUOTATION_ONLY' %}single{% endif %}">
-<div><h3>Kepada Yth.</h3><p style="font-size:14px;font-weight:900">{{ quotation["customer_nama"] or "-" }}</p><p>{{ quotation["customer_instansi"] or "-" }}</p><p>{{ quotation["customer_kota"] or "-" }}</p></div>
+<div><h3>Kepada Yth.</h3><p style="font-size:14px;font-weight:900">{{ quotation["customer_nama"] or "-" }}</p>{% if quotation["customer_instansi"] %}<p>{{ quotation["customer_instansi"] }}</p>{% endif %}{% if quotation["customer_alamat"] %}<p>{{ quotation["customer_alamat"] }}</p>{% endif %}{% if quotation["customer_kota"] %}<p>{{ quotation["customer_kota"] }}</p>{% endif %}{% if quotation["customer_whatsapp"] %}<p>WA: {{ quotation["customer_whatsapp"] }}</p>{% endif %}{% if quotation["customer_email"] %}<p>{{ quotation["customer_email"] }}</p>{% endif %}</div>
 {% if show_bank and identity['identity_type'] != 'QUOTATION_ONLY' %}
 <div class="bank">
 <h3>Rekening Pembayaran:</h3>
@@ -69,13 +69,7 @@ table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{border:1px so
 <tbody>
 {% for item in items %}
 <tr><td style="text-align:center">{{ loop.index }}</td><td>{{ item["kode_produk_snapshot"] or "-" }}</td><td><strong>{{ item["nama_produk_snapshot"] }}</strong></td>
-<td><div class="spec">
-<span class="label">Brand</span><span>:</span><strong>{{ item["brand_snapshot"] or "-" }}</strong>
-<span class="label">{% if (item["kategori_snapshot"] or "")|lower == "tangga" %}Steps{% else %}Warna{% endif %}</span><span>:</span><strong>{% if (item["kategori_snapshot"] or "")|lower == "tangga" %}{{ item["warna_snapshot"] or item["ukuran_snapshot"] or "-" }}{% else %}{{ item["warna_snapshot"] or "-" }}{% endif %}</strong>
-<span class="label">Ukuran</span><span>:</span><strong>{{ item["ukuran_snapshot"] or "-" }}</strong>
-<span class="label">Varian</span><span>:</span><strong>{{ item["varian_snapshot"] or "-" }}</strong>
-<span class="label">Kategori</span><span>:</span><strong>{{ item["kategori_snapshot"] or "-" }}</strong>
-</div></td>
+<td>{% if item["spesifikasi_lines"] %}<div class="spec">{% for specification in item["spesifikasi_lines"] %}<span class="label">{{ specification["label"] }}</span><span>:</span><strong>{{ specification["value"] }}</strong>{% endfor %}</div>{% else %}-{% endif %}</td>
 <td style="text-align:center">{{ item["qty"] }}</td><td style="text-align:center">{{ item["satuan_snapshot"] or "Unit" }}</td>
 <td class="right">Rp {{ "{:,.0f}".format(item["harga_satuan"] or 0).replace(",", ".") }}</td>
 {% if show_discount %}<td class="right">Rp {{ "{:,.0f}".format(item["diskon_item"] or 0).replace(",", ".") }}</td>{% endif %}

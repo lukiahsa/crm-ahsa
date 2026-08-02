@@ -6,7 +6,7 @@ import io
 import sqlite3
 from datetime import datetime
 
-from flask import Flask, redirect, render_template, request, url_for
+from flask import Flask, jsonify, redirect, render_template, request, url_for
 from werkzeug.utils import secure_filename
 
 from customer_import import (
@@ -27,6 +27,17 @@ from product_import import (
     import_product_rows,
     parse_product_workbook,
     summarize_rows,
+)
+from quotation_master import (
+    customer_search_result,
+    customer_snapshot,
+    get_customer_for_quotation,
+    get_product_for_quotation,
+    product_search_result,
+    product_snapshot,
+    quotation_item_for_display,
+    search_customers,
+    search_products,
 )
 
 try:
@@ -1328,47 +1339,43 @@ def get_products_for_form(conn):
 
 
 def get_product_by_id(conn, product_id):
-    return conn.execute(
-        """
-        SELECT
-            products.*,
-            product_categories.nama AS kategori_nama,
-            product_brands.nama AS brand_nama,
-            product_variants.nama AS varian_nama,
-            product_colors.nama AS warna_nama,
-            product_sizes.nama AS ukuran_nama,
-            suppliers.nama AS supplier_nama
+    return get_product_for_quotation(conn, product_id)
 
-        FROM products
 
-        LEFT JOIN product_categories
-            ON products.category_id =
-               product_categories.id
+@app.route("/api/customers/search")
+def api_customer_search():
+    conn = get_connection()
+    try:
+        customers_found = search_customers(
+            conn,
+            request.args.get("keyword", ""),
+            request.args.get("limit", 20),
+        )
+        results = [
+            customer_search_result(customer)
+            for customer in customers_found
+        ]
+    finally:
+        conn.close()
+    return jsonify({"results": results})
 
-        LEFT JOIN product_brands
-            ON products.brand_id =
-               product_brands.id
 
-        LEFT JOIN product_variants
-            ON products.variant_id =
-               product_variants.id
-
-        LEFT JOIN product_colors
-            ON products.color_id =
-               product_colors.id
-
-        LEFT JOIN product_sizes
-            ON products.size_id =
-               product_sizes.id
-
-        LEFT JOIN suppliers
-            ON products.supplier_id =
-               suppliers.id
-
-        WHERE products.id = ?
-        """,
-        (product_id,),
-    ).fetchone()
+@app.route("/api/products/search")
+def api_product_search():
+    conn = get_connection()
+    try:
+        products_found = search_products(
+            conn,
+            request.args.get("keyword", ""),
+            request.args.get("limit", 20),
+        )
+        results = [
+            product_search_result(product)
+            for product in products_found
+        ]
+    finally:
+        conn.close()
+    return jsonify({"results": results})
 
 
 # ==========================================================
@@ -3650,8 +3657,14 @@ def quotations():
         """
         SELECT
             sales_quotations.*,
-            customers.nama AS customer_nama,
-            customers.instansi AS customer_instansi,
+            COALESCE(
+                sales_quotations.customer_nama_snapshot,
+                customers.nama
+            ) AS customer_nama,
+            COALESCE(
+                sales_quotations.customer_perusahaan_snapshot,
+                customers.instansi
+            ) AS customer_instansi,
             company_identities.code AS identity_code,
             company_identities.identity_type AS identity_type,
             company_identities.nama_perusahaan AS identity_name
@@ -3835,6 +3848,107 @@ def calculate_transaction_financials(
     }
 
 
+def get_quotation_with_customer_snapshot(conn, quotation_id):
+    return conn.execute(
+        """
+        SELECT
+            sales_quotations.*,
+            COALESCE(
+                sales_quotations.customer_nama_snapshot,
+                customers.nama
+            ) AS customer_nama,
+            COALESCE(
+                sales_quotations.customer_perusahaan_snapshot,
+                customers.instansi
+            ) AS customer_instansi,
+            COALESCE(
+                sales_quotations.customer_pic_snapshot,
+                customers.nama
+            ) AS customer_pic,
+            COALESCE(
+                sales_quotations.customer_whatsapp_snapshot,
+                customers.whatsapp_normalized,
+                customers.whatsapp
+            ) AS customer_whatsapp,
+            COALESCE(
+                sales_quotations.customer_email_snapshot,
+                customers.email
+            ) AS customer_email,
+            COALESCE(
+                sales_quotations.customer_alamat_snapshot,
+                customers.alamat
+            ) AS customer_alamat,
+            COALESCE(
+                sales_quotations.customer_kota_snapshot,
+                customers.kota
+            ) AS customer_kota,
+            COALESCE(
+                sales_quotations.customer_status_snapshot,
+                customers.status
+            ) AS customer_status,
+            COALESCE(
+                sales_quotations.customer_minat_snapshot,
+                customers.produk
+            ) AS customer_minat
+        FROM sales_quotations
+        LEFT JOIN customers
+            ON sales_quotations.customer_id = customers.id
+        WHERE sales_quotations.id = ?
+        """,
+        (quotation_id,),
+    ).fetchone()
+
+
+def quotation_customer_selection(quotation):
+    if quotation is None or quotation["customer_id"] is None:
+        return None
+    return {
+        "id": int(quotation["customer_id"]),
+        "nama": quotation["customer_nama"],
+        "perusahaan": quotation["customer_instansi"],
+        "pic": quotation["customer_pic"],
+        "whatsapp": quotation["customer_whatsapp"],
+        "email": quotation["customer_email"],
+        "alamat": quotation["customer_alamat"],
+        "kota": quotation["customer_kota"],
+        "status": quotation["customer_status"],
+        "minat_produk": quotation["customer_minat"],
+    }
+
+
+def quotation_item_selection(item):
+    display_item = quotation_item_for_display(item)
+    return {
+        "product_id": item["product_id"],
+        "kode_produk": item["kode_produk_snapshot"],
+        "nama_produk": item["nama_produk_snapshot"],
+        "satuan": item["satuan_snapshot"] or "Unit",
+        "harga_jual_default": int(item["harga_satuan"] or 0),
+        "qty": int(item["qty"] or 0),
+        "harga_satuan": int(item["harga_satuan"] or 0),
+        "diskon_item": int(item["diskon_item"] or 0),
+        "spesifikasi": display_item["spesifikasi_lines"],
+    }
+
+
+def prepare_quotation_customer(conn, customer_id_raw):
+    try:
+        customer_id = int(customer_id_raw)
+    except (TypeError, ValueError) as error:
+        raise ValueError("Customer tidak ditemukan.") from error
+
+    customer = get_customer_for_quotation(
+        conn,
+        customer_id,
+    )
+    if customer is None:
+        raise ValueError("Customer tidak ditemukan.")
+    if not int(customer["status_aktif"] or 0):
+        raise ValueError("Customer tidak aktif.")
+
+    return customer_id, customer_snapshot(customer)
+
+
 def prepare_quotation_items(conn, form):
     product_ids = form.getlist("product_id[]")
     qty_values = form.getlist("qty[]")
@@ -3863,7 +3977,12 @@ def prepare_quotation_items(conn, form):
                 f"Produk baris ke-{nomor_baris} belum dipilih."
             )
 
-        product_id = int(product_id_raw)
+        try:
+            product_id = int(product_id_raw)
+        except (TypeError, ValueError) as error:
+            raise ValueError(
+                f"Produk baris ke-{nomor_baris} tidak ditemukan."
+            ) from error
         qty = parse_integer(qty_values[index])
         harga_satuan = parse_integer(harga_values[index])
         diskon_item = parse_integer(diskon_item_values[index])
@@ -3878,12 +3997,21 @@ def prepare_quotation_items(conn, form):
                 f"Harga atau diskon baris ke-{nomor_baris} tidak valid."
             )
 
-        product = get_product_by_id(conn, product_id)
+        product = get_product_for_quotation(
+            conn,
+            product_id,
+        )
 
         if product is None:
             raise ValueError(
                 f"Produk baris ke-{nomor_baris} tidak ditemukan."
             )
+        if not int(product["status_aktif"] or 0):
+            raise ValueError(
+                f"Produk baris ke-{nomor_baris} tidak aktif."
+            )
+
+        snapshot = product_snapshot(product)
 
         subtotal_item = calculate_quotation_item_subtotal(
             qty,
@@ -3894,15 +4022,7 @@ def prepare_quotation_items(conn, form):
 
         prepared_items.append(
             {
-                "product_id": product_id,
-                "kode_produk": product["kode_produk"],
-                "nama_produk": product["nama_produk"],
-                "kategori": product["kategori_nama"],
-                "brand": product["brand_nama"],
-                "varian": product["varian_nama"],
-                "warna": product["warna_nama"],
-                "ukuran": product["ukuran_nama"],
-                "satuan": product["satuan"],
+                **snapshot,
                 "qty": qty,
                 "harga_satuan": harga_satuan,
                 "diskon_item": diskon_item,
@@ -3928,12 +4048,19 @@ def insert_quotation_items(conn, quotation_id, prepared_items):
                 warna_snapshot,
                 ukuran_snapshot,
                 satuan_snapshot,
+                subkategori_snapshot,
+                jenis_produk_snapshot,
+                steps_snapshot,
+                spesifikasi_snapshot,
+                harga_modal_snapshot,
                 qty,
                 harga_satuan,
                 diskon_item,
                 subtotal
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            )
             """,
             (
                 quotation_id,
@@ -3946,6 +4073,11 @@ def insert_quotation_items(conn, quotation_id, prepared_items):
                 item["warna"],
                 item["ukuran"],
                 item["satuan"],
+                item["subkategori"],
+                item["jenis_produk"],
+                item["steps"],
+                item["spesifikasi"],
+                item["harga_modal"],
                 item["qty"],
                 item["harga_satuan"],
                 item["diskon_item"],
@@ -3964,16 +4096,6 @@ def add_quotation():
     identities_list = get_active_quotation_identities(conn)
     default_identity = get_default_full_identity(conn)
 
-    customers_list = conn.execute(
-        """
-        SELECT id, nama, instansi, kota
-        FROM customers
-        ORDER BY nama
-        """
-    ).fetchall()
-
-    products_list = get_products_for_form(conn)
-
     if request.method == "POST":
         identity_id_raw = request.form.get("identity_id", "").strip()
 
@@ -3984,9 +4106,8 @@ def add_quotation():
         tanggal = request.form.get("tanggal", "").strip()
         berlaku_sampai = request.form.get("berlaku_sampai", "").strip()
         sales = request.form.get("sales", "").strip()
-        diskon_global = max(
-            parse_integer(request.form.get("diskon", "0")),
-            0,
+        diskon_global = parse_integer(
+            request.form.get("diskon", "0")
         )
         catatan = request.form.get("catatan", "").strip()
         syarat_ketentuan = request.form.get(
@@ -4003,11 +4124,17 @@ def add_quotation():
             return "Tanggal penawaran wajib diisi.", 400
 
         try:
+            if diskon_global < 0:
+                raise ValueError("Diskon global tidak boleh negatif.")
+
             identity = validate_quotation_identity(
                 conn,
                 identity_id_raw,
             )
-            customer_id = int(customer_id_raw)
+            customer_id, customer_data = prepare_quotation_customer(
+                conn,
+                customer_id_raw,
+            )
             prepared_items, subtotal_penawaran = (
                 prepare_quotation_items(conn, request.form)
             )
@@ -4045,10 +4172,20 @@ def add_quotation():
                     grand_total,
                     catatan,
                     syarat_ketentuan,
-                    identity_id
+                    identity_id,
+                    customer_nama_snapshot,
+                    customer_perusahaan_snapshot,
+                    customer_pic_snapshot,
+                    customer_whatsapp_snapshot,
+                    customer_email_snapshot,
+                    customer_alamat_snapshot,
+                    customer_kota_snapshot,
+                    customer_status_snapshot,
+                    customer_minat_snapshot
                 )
                 VALUES (
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?
                 )
                 """,
                 (
@@ -4069,6 +4206,15 @@ def add_quotation():
                     catatan or None,
                     syarat_ketentuan or None,
                     identity["id"],
+                    customer_data["customer_nama_snapshot"],
+                    customer_data["customer_perusahaan_snapshot"],
+                    customer_data["customer_pic_snapshot"],
+                    customer_data["customer_whatsapp_snapshot"],
+                    customer_data["customer_email_snapshot"],
+                    customer_data["customer_alamat_snapshot"],
+                    customer_data["customer_kota_snapshot"],
+                    customer_data["customer_status_snapshot"],
+                    customer_data["customer_minat_snapshot"],
                 ),
             )
 
@@ -4106,9 +4252,9 @@ def add_quotation():
 
     return render_template(
         "add_quotation.html",
-        customers=customers_list,
-        products=products_list,
         identities=identities_list,
+        selected_customer=None,
+        initial_items=[],
         default_identity_id=(
             default_identity["id"] if default_identity else None
         ),
@@ -4122,14 +4268,10 @@ def add_quotation():
 def edit_quotation(quotation_id):
     conn = get_connection()
 
-    quotation = conn.execute(
-        """
-        SELECT *
-        FROM sales_quotations
-        WHERE id = ?
-        """,
-        (quotation_id,),
-    ).fetchone()
+    quotation = get_quotation_with_customer_snapshot(
+        conn,
+        quotation_id,
+    )
 
     if quotation is None:
         conn.close()
@@ -4141,16 +4283,6 @@ def edit_quotation(quotation_id):
         quotation_id,
         conn=conn,
     )
-
-    customers_list = conn.execute(
-        """
-        SELECT id, nama, instansi, kota
-        FROM customers
-        ORDER BY nama
-        """
-    ).fetchall()
-
-    products_list = get_products_for_form(conn)
 
     existing_items = conn.execute(
         """
@@ -4171,9 +4303,8 @@ def edit_quotation(quotation_id):
         tanggal = request.form.get("tanggal", "").strip()
         berlaku_sampai = request.form.get("berlaku_sampai", "").strip()
         sales = request.form.get("sales", "").strip()
-        diskon_global = max(
-            parse_integer(request.form.get("diskon", "0")),
-            0,
+        diskon_global = parse_integer(
+            request.form.get("diskon", "0")
         )
         catatan = request.form.get("catatan", "").strip()
         syarat_ketentuan = request.form.get(
@@ -4186,6 +4317,9 @@ def edit_quotation(quotation_id):
             return "Customer dan tanggal wajib diisi.", 400
 
         try:
+            if diskon_global < 0:
+                raise ValueError("Diskon global tidak boleh negatif.")
+
             identity = validate_quotation_identity(
                 conn,
                 identity_id_raw,
@@ -4200,7 +4334,10 @@ def edit_quotation(quotation_id):
                     "tidak dapat diubah."
                 )
 
-            customer_id = int(customer_id_raw)
+            customer_id, customer_data = prepare_quotation_customer(
+                conn,
+                customer_id_raw,
+            )
             prepared_items, subtotal_penawaran = (
                 prepare_quotation_items(conn, request.form)
             )
@@ -4227,6 +4364,15 @@ def edit_quotation(quotation_id):
                     grand_total = ?,
                     catatan = ?,
                     syarat_ketentuan = ?,
+                    customer_nama_snapshot = ?,
+                    customer_perusahaan_snapshot = ?,
+                    customer_pic_snapshot = ?,
+                    customer_whatsapp_snapshot = ?,
+                    customer_email_snapshot = ?,
+                    customer_alamat_snapshot = ?,
+                    customer_kota_snapshot = ?,
+                    customer_status_snapshot = ?,
+                    customer_minat_snapshot = ?,
                     status = CASE
                         WHEN status = 'Deal' THEN status
                         ELSE 'Revisi'
@@ -4250,6 +4396,15 @@ def edit_quotation(quotation_id):
                     totals["grand_total"],
                     catatan or None,
                     syarat_ketentuan or None,
+                    customer_data["customer_nama_snapshot"],
+                    customer_data["customer_perusahaan_snapshot"],
+                    customer_data["customer_pic_snapshot"],
+                    customer_data["customer_whatsapp_snapshot"],
+                    customer_data["customer_email_snapshot"],
+                    customer_data["customer_alamat_snapshot"],
+                    customer_data["customer_kota_snapshot"],
+                    customer_data["customer_status_snapshot"],
+                    customer_data["customer_minat_snapshot"],
                     quotation_id,
                 ),
             )
@@ -4289,10 +4444,13 @@ def edit_quotation(quotation_id):
         "edit_quotation.html",
         quotation=quotation,
         items=existing_items,
-        customers=customers_list,
-        products=products_list,
         identities=identities_list,
         current_identity=current_identity,
+        selected_customer=quotation_customer_selection(quotation),
+        initial_items=[
+            quotation_item_selection(item)
+            for item in existing_items
+        ],
     )
 
 
@@ -4300,21 +4458,10 @@ def edit_quotation(quotation_id):
 def quotation_detail(quotation_id):
     conn = get_connection()
 
-    quotation = conn.execute(
-        """
-        SELECT
-            sales_quotations.*,
-            customers.nama AS customer_nama,
-            customers.instansi AS customer_instansi,
-            customers.whatsapp AS customer_whatsapp,
-            customers.kota AS customer_kota
-        FROM sales_quotations
-        LEFT JOIN customers
-            ON sales_quotations.customer_id = customers.id
-        WHERE sales_quotations.id = ?
-        """,
-        (quotation_id,),
-    ).fetchone()
+    quotation = get_quotation_with_customer_snapshot(
+        conn,
+        quotation_id,
+    )
 
     if quotation is None:
         conn.close()
@@ -4326,7 +4473,7 @@ def quotation_detail(quotation_id):
         conn=conn,
     )
 
-    items = conn.execute(
+    item_rows = conn.execute(
         """
         SELECT *
         FROM sales_quotation_items
@@ -4335,6 +4482,10 @@ def quotation_detail(quotation_id):
         """,
         (quotation_id,),
     ).fetchall()
+    items = [
+        quotation_item_for_display(item)
+        for item in item_rows
+    ]
 
     activities = conn.execute(
         """
@@ -4541,22 +4692,10 @@ def update_quotation_print_settings(quotation_id):
 def print_quotation(quotation_id):
     conn = get_connection()
 
-    quotation = conn.execute(
-        """
-        SELECT
-            sales_quotations.*,
-            customers.nama AS customer_nama,
-            customers.instansi AS customer_instansi,
-            customers.whatsapp AS customer_whatsapp,
-            customers.kota AS customer_kota,
-            customers.catatan AS customer_catatan
-        FROM sales_quotations
-        LEFT JOIN customers
-            ON sales_quotations.customer_id = customers.id
-        WHERE sales_quotations.id = ?
-        """,
-        (quotation_id,),
-    ).fetchone()
+    quotation = get_quotation_with_customer_snapshot(
+        conn,
+        quotation_id,
+    )
 
     if quotation is None:
         conn.close()
@@ -4572,7 +4711,7 @@ def print_quotation(quotation_id):
         identity,
     )
 
-    items = conn.execute(
+    item_rows = conn.execute(
         """
         SELECT *
         FROM sales_quotation_items
@@ -4581,6 +4720,10 @@ def print_quotation(quotation_id):
         """,
         (quotation_id,),
     ).fetchall()
+    items = [
+        quotation_item_for_display(item)
+        for item in item_rows
+    ]
 
     add_quotation_activity(
         conn,
@@ -4664,19 +4807,10 @@ def print_quotation(quotation_id):
 def send_quotation_whatsapp(quotation_id):
     conn = get_connection()
 
-    quotation = conn.execute(
-        """
-        SELECT
-            sales_quotations.*,
-            customers.nama AS customer_nama,
-            customers.whatsapp AS customer_whatsapp
-        FROM sales_quotations
-        LEFT JOIN customers
-            ON sales_quotations.customer_id = customers.id
-        WHERE sales_quotations.id = ?
-        """,
-        (quotation_id,),
-    ).fetchone()
+    quotation = get_quotation_with_customer_snapshot(
+        conn,
+        quotation_id,
+    )
 
     if quotation is None:
         conn.close()
@@ -4753,14 +4887,10 @@ def send_quotation_whatsapp(quotation_id):
 def duplicate_quotation(quotation_id):
     conn = get_connection()
 
-    source = conn.execute(
-        """
-        SELECT *
-        FROM sales_quotations
-        WHERE id = ?
-        """,
-        (quotation_id,),
-    ).fetchone()
+    source = get_quotation_with_customer_snapshot(
+        conn,
+        quotation_id,
+    )
 
     if source is None:
         conn.close()
@@ -4840,11 +4970,20 @@ def duplicate_quotation(quotation_id):
                 show_bank,
                 show_signature,
                 show_footer,
-                auto_hide_zero
+                auto_hide_zero,
+                customer_nama_snapshot,
+                customer_perusahaan_snapshot,
+                customer_pic_snapshot,
+                customer_whatsapp_snapshot,
+                customer_email_snapshot,
+                customer_alamat_snapshot,
+                customer_kota_snapshot,
+                customer_status_snapshot,
+                customer_minat_snapshot
             )
             VALUES (
                 ?, ?, ?, ?, ?, 'Draft', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )
             """,
             (
@@ -4872,6 +5011,15 @@ def duplicate_quotation(quotation_id):
                 source["show_signature"],
                 source["show_footer"],
                 source["auto_hide_zero"],
+                source["customer_nama"],
+                source["customer_instansi"],
+                source["customer_pic"],
+                source["customer_whatsapp"],
+                source["customer_email"],
+                source["customer_alamat"],
+                source["customer_kota"],
+                source["customer_status"],
+                source["customer_minat"],
             ),
         )
 
@@ -4891,12 +5039,19 @@ def duplicate_quotation(quotation_id):
                     warna_snapshot,
                     ukuran_snapshot,
                     satuan_snapshot,
+                    subkategori_snapshot,
+                    jenis_produk_snapshot,
+                    steps_snapshot,
+                    spesifikasi_snapshot,
+                    harga_modal_snapshot,
                     qty,
                     harga_satuan,
                     diskon_item,
                     subtotal
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                )
                 """,
                 (
                     new_id,
@@ -4909,6 +5064,11 @@ def duplicate_quotation(quotation_id):
                     item["warna_snapshot"],
                     item["ukuran_snapshot"],
                     item["satuan_snapshot"],
+                    item["subkategori_snapshot"],
+                    item["jenis_produk_snapshot"],
+                    item["steps_snapshot"],
+                    item["spesifikasi_snapshot"],
+                    item["harga_modal_snapshot"],
                     item["qty"],
                     item["harga_satuan"],
                     item["diskon_item"],
@@ -5057,12 +5217,18 @@ def convert_quotation_to_transaction(quotation_id):
                 item["product_id"],
             )
             qty = max(int(item["qty"] or 0), 0)
-            harga_modal = max(
-                int(product["harga_modal_default"] or 0)
-                if product
-                else 0,
-                0,
-            )
+            if item["harga_modal_snapshot"] is not None:
+                harga_modal = max(
+                    int(item["harga_modal_snapshot"] or 0),
+                    0,
+                )
+            else:
+                harga_modal = max(
+                    int(product["harga_modal_default"] or 0)
+                    if product
+                    else 0,
+                    0,
+                )
             allocation_item = dict(item)
             allocation_item["qty"] = qty
             allocation_item["harga_modal"] = harga_modal
