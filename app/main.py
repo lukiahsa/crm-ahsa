@@ -1,10 +1,23 @@
 import base64
+import binascii
+import hmac
 import io
 import sqlite3
 from datetime import datetime
 
 from flask import Flask, redirect, render_template, request, url_for
+from werkzeug.utils import secure_filename
 
+from customer_import import (
+    MAX_IMPORT_BYTES,
+    CustomerImportError,
+    build_import_report,
+    consolidate_customer_records,
+    import_customers_atomic,
+    parse_customer_workbook,
+    prepare_customer_import,
+    sha256_bytes,
+)
 from database import create_tables, get_connection
 
 try:
@@ -1492,11 +1505,17 @@ def customers():
             FROM customers
             WHERE nama LIKE ?
                OR whatsapp LIKE ?
+               OR whatsapp_normalized LIKE ?
                OR instansi LIKE ?
                OR kota LIKE ?
+               OR email LIKE ?
+               OR produk_existing LIKE ?
             ORDER BY id DESC
             """,
             (
+                f"%{keyword}%",
+                f"%{keyword}%",
+                f"%{keyword}%",
                 f"%{keyword}%",
                 f"%{keyword}%",
                 f"%{keyword}%",
@@ -1519,6 +1538,129 @@ def customers():
         "customers.html",
         customers=daftar_customer,
     )
+
+
+def _customer_import_preview_rows(customers, limit=500):
+    """Prioritaskan row konflik sebelum row reguler pada preview terbatas."""
+
+    conflict_rows = [
+        customer
+        for customer in customers
+        if customer.get("conflicts") or customer.get("warnings")
+    ]
+    regular_rows = [
+        customer
+        for customer in customers
+        if not customer.get("conflicts") and not customer.get("warnings")
+    ]
+    return (conflict_rows + regular_rows)[:limit]
+
+
+@app.route("/customers/import", methods=["GET", "POST"])
+def import_customers():
+    context = {
+        "preview": None,
+        "preview_rows": [],
+        "encoded_file": None,
+        "file_sha256": None,
+        "filename": None,
+        "result": None,
+        "error": None,
+        "preview_limit": 500,
+    }
+
+    if request.method == "GET":
+        return render_template("customer_import.html", **context)
+
+    action = request.form.get("action", "preview")
+    conn = get_connection()
+    try:
+        if action == "confirm":
+            encoded_file = request.form.get("encoded_file", "")
+            filename = secure_filename(request.form.get("filename", ""))
+            expected_sha256 = request.form.get("file_sha256", "")
+            if not encoded_file or not filename or not expected_sha256:
+                raise CustomerImportError(
+                    "Payload preview tidak lengkap. Upload ulang file sebelum konfirmasi."
+                )
+            try:
+                content = base64.b64decode(encoded_file, validate=True)
+            except (binascii.Error, ValueError) as exc:
+                raise CustomerImportError(
+                    "Payload file preview rusak. Upload ulang file."
+                ) from exc
+            if len(content) > MAX_IMPORT_BYTES:
+                raise CustomerImportError("Ukuran file melebihi batas aman 10 MB.")
+            actual_sha256 = sha256_bytes(content)
+            if not hmac.compare_digest(actual_sha256, expected_sha256):
+                raise CustomerImportError(
+                    "File berubah setelah preview. Upload ulang untuk menjaga konsistensi import."
+                )
+
+            parsed = parse_customer_workbook(content)
+            consolidated = consolidate_customer_records(parsed)
+            batch_id = (
+                datetime.now().strftime("CUST-%Y%m%d-%H%M%S-%f")
+                + "-"
+                + actual_sha256[:8]
+            )
+            imported = import_customers_atomic(
+                conn,
+                consolidated,
+                batch_id=batch_id,
+                filename=filename,
+                file_sha256=actual_sha256,
+            )
+            context.update(
+                {
+                    "result": imported,
+                    "filename": filename,
+                    "file_sha256": actual_sha256,
+                }
+            )
+        elif action == "preview":
+            upload = request.files.get("customer_file")
+            if upload is None or not upload.filename:
+                raise CustomerImportError("Pilih file MASTER DATABASE FINAL.xlsx.")
+            filename = secure_filename(upload.filename)
+            if not filename.casefold().endswith(".xlsx"):
+                raise CustomerImportError("Format file wajib XLSX.")
+            content = upload.stream.read(MAX_IMPORT_BYTES + 1)
+            if len(content) > MAX_IMPORT_BYTES:
+                raise CustomerImportError("Ukuran file melebihi batas aman 10 MB.")
+            if not content:
+                raise CustomerImportError("File XLSX kosong.")
+
+            file_sha256 = sha256_bytes(content)
+            preview = prepare_customer_import(content, conn)
+            preview["report_markdown"] = build_import_report(
+                preview["summary"],
+                preview["per_sheet"],
+                filename,
+                file_sha256,
+                preview["customers"],
+            )
+            context.update(
+                {
+                    "preview": preview,
+                    "preview_rows": _customer_import_preview_rows(
+                        preview["customers"],
+                        context["preview_limit"],
+                    ),
+                    "encoded_file": base64.b64encode(content).decode("ascii"),
+                    "file_sha256": file_sha256,
+                    "filename": filename,
+                }
+            )
+        else:
+            raise CustomerImportError("Aksi import tidak dikenal.")
+    except (CustomerImportError, sqlite3.Error) as exc:
+        context["error"] = str(exc)
+        return render_template("customer_import.html", **context), 400
+    finally:
+        conn.close()
+
+    return render_template("customer_import.html", **context)
 
 
 @app.route(
