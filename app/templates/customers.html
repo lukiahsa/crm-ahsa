@@ -110,6 +110,24 @@
             color: #6b7280;
         }
 
+        .panel-heading {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .btn-import {
+            display: inline-block;
+            padding: 11px 16px;
+            border-radius: 7px;
+            background: #0f766e;
+            color: #fff;
+            text-decoration: none;
+            font-weight: bold;
+        }
+
         @media (max-width: 760px) {
             form {
                 grid-template-columns: 1fr;
@@ -275,7 +293,12 @@
         </section>
 
         <section class="panel">
-            <h2>Daftar Customer</h2>
+            <div class="panel-heading">
+                <h2>Daftar Customer</h2>
+                <a href="{{ url_for('import_customers') }}" class="btn-import">
+                    Import Master Customer
+                </a>
+            </div>
 <form method="GET" action="/customers" class="search-form">
     <input
         type="text"
