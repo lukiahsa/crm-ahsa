@@ -1804,9 +1804,28 @@ def edit_customer(customer_id):
 @app.route("/products")
 def products():
     conn = get_connection()
+    keyword = request.args.get("keyword", "").strip()
+
+    where_clause = ""
+    parameters = ()
+    if keyword:
+        where_clause = """
+        WHERE products.kode_produk LIKE ?
+           OR products.nama_produk LIKE ?
+           OR product_categories.nama LIKE ?
+           OR product_brands.nama LIKE ?
+           OR product_variants.nama LIKE ?
+           OR product_colors.nama LIKE ?
+           OR product_sizes.nama LIKE ?
+           OR products.subkategori LIKE ?
+           OR products.jenis_produk LIKE ?
+           OR products.steps LIKE ?
+        """
+        like_keyword = f"%{keyword}%"
+        parameters = (like_keyword,) * 10
 
     daftar_produk = conn.execute(
-        """
+        f"""
         SELECT
             products.*,
             product_categories.nama AS kategori_nama,
@@ -1842,12 +1861,15 @@ def products():
             ON products.supplier_id =
                suppliers.id
 
+        {where_clause}
+
         ORDER BY
             kategori_nama,
             products.nama_produk,
             warna_nama,
             ukuran_nama
-        """
+        """,
+        parameters,
     ).fetchall()
 
     conn.close()
@@ -1855,6 +1877,7 @@ def products():
     return render_template(
         "products.html",
         products=daftar_produk,
+        keyword=keyword,
     )
 
 

@@ -70,6 +70,21 @@
             overflow-x: auto;
         }
 
+        .search-form {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 18px;
+        }
+
+        .search-form input {
+            flex: 1;
+            min-width: 220px;
+            padding: 11px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 7px;
+            font: inherit;
+        }
+
         table {
             width: 100%;
             border-collapse: collapse;
@@ -143,6 +158,20 @@
         </div>
 
         <div class="card">
+            <form method="get" action="{{ url_for('products') }}" class="search-form">
+                <input
+                    type="search"
+                    name="keyword"
+                    value="{{ keyword }}"
+                    placeholder="Cari kode, nama, kategori, brand, varian, warna, ukuran, atau steps"
+                    aria-label="Cari master produk"
+                >
+                <button type="submit" class="btn btn-primary">Cari</button>
+                {% if keyword %}
+                    <a href="{{ url_for('products') }}" class="btn btn-secondary">Reset</a>
+                {% endif %}
+            </form>
+
             <table>
                 <thead>
                     <tr>

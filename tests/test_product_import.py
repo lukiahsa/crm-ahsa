@@ -319,6 +319,17 @@ class ProductImportTest(unittest.TestCase):
         self.assertIn("Dalton", page)
         self.assertIn("25 Liter Pedal", page)
 
+    def test_products_page_searches_master_with_parameterized_query(self):
+        conn = database.get_connection()
+        product_import.import_product_rows(conn, self.parse_rows())
+        conn.close()
+
+        response = self.client.get("/products?keyword=MAL4x3")
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        page = response.get_data(as_text=True)
+        self.assertIn("MAL4x3", page)
+        self.assertNotIn("HT Plastik 150", page)
+
 
 if __name__ == "__main__":
     unittest.main()
