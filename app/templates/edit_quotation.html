@@ -12,13 +12,14 @@ table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{border:1px so
 .preset{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}.preset button{padding:7px 10px;border:1px solid #bfd0dd;background:#f3f7fa;border-radius:999px;cursor:pointer;font-size:11px;font-weight:700}
 .identity-options{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.identity-option{display:flex;align-items:flex-start;gap:10px;border:1px solid #cad6df;border-radius:8px;padding:12px;background:#f8fafc;cursor:pointer}.identity-option input{width:auto;margin-top:2px;accent-color:#0b4388}.identity-option strong,.identity-option small{display:block}.identity-option small{font-weight:400;color:#687580;margin-top:4px;line-height:1.35}.identity-lock{margin-top:8px;color:#9a6500;font-size:12px;font-weight:700}
 .tax-notice{margin-top:10px;padding:10px 12px;border:1px solid #b9cbe0;border-radius:7px;background:#edf5ff;color:#174b7a;font-size:12px;font-weight:800}.tax-notice.ppn{border-color:#efc45c;background:#fff5d8;color:#704d00}
+.autocomplete{position:relative}.autocomplete-results{position:absolute;z-index:30;left:0;right:0;top:100%;max-height:280px;overflow:auto;background:#fff;border:1px solid #b9c8d4;border-radius:0 0 8px 8px;box-shadow:0 10px 22px rgba(20,40,60,.16)}.search-result{display:block;width:100%;border:0;border-bottom:1px solid #e2e8ed;background:#fff;text-align:left;padding:10px 12px;cursor:pointer}.search-result:hover{background:#edf5ff}.search-result strong,.search-result span,.selected-master strong,.selected-master span{display:block}.search-result span,.selected-master span{font-size:11px;color:#64727d;margin-top:4px;line-height:1.35}.selected-master{margin-top:7px;padding:9px 10px;border:1px solid #cce0d3;border-radius:7px;background:#f2fbf5}.empty-result{padding:12px;color:#6b7882;font-size:12px}.product-cell{position:relative}.new-customer{display:inline-block;margin-top:8px;color:#0b4388;font-size:12px;font-weight:800;text-decoration:none}
 @media(max-width:800px){.grid,.summary{grid-template-columns:1fr}.full{grid-column:auto}table{min-width:900px}.head{align-items:flex-start;flex-direction:column}}
 </style>
 </head>
 <body>
 <main class="container">
 <div class="head"><div><h1>Edit Penawaran</h1><div class="sub">Aturan PPN diterapkan otomatis berdasarkan identity quotation.</div></div><a class="btn gray" href="{{ url_for('quotation_detail', quotation_id=quotation['id']) }}">Kembali</a></div>
-<form method="POST">
+<form method="POST" data-quotation-form data-customer-search-url="{{ url_for('api_customer_search') }}" data-product-search-url="{{ url_for('api_product_search') }}">
 <section class="card"><div class="title">Informasi Penawaran</div>
 <div><label>Identity</label><div class="identity-options">
 {% for identity in identities %}
@@ -29,9 +30,7 @@ table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{border:1px so
 {% endfor %}
 </div><div id="taxNotice" class="tax-notice" role="status"></div>{% if quotation['converted_transaction_id'] %}<div class="identity-lock">Identity dikunci karena quotation sudah dikonversi.</div>{% endif %}</div>
 <div class="grid" style="margin-top:15px">
-<div><label>Customer</label><select name="customer_id" required><option value="">Pilih customer</option>
-{% for customer in customers %}<option value="{{ customer['id'] }}" {% if customer['id'] == quotation['customer_id'] %}selected{% endif %}>{{ customer['nama'] }}{% if customer['instansi'] %} — {{ customer['instansi'] }}{% endif %}</option>{% endfor %}
-</select></div>
+<div class="autocomplete"><label>Customer</label><input id="customerSearch" type="search" placeholder="Ketik minimal 2 karakter: nama, perusahaan, WA, email, kota, atau status" autocomplete="off"><input id="customerId" type="hidden" name="customer_id" required><div id="customerResults" class="autocomplete-results" hidden></div><div id="customerSelection" class="selected-master" hidden></div><a class="new-customer" href="{{ url_for('customers') }}" target="_blank">+ Tambah Customer Baru</a></div>
 <div><label>Sales</label><input name="sales" value="{{ quotation['sales'] or '' }}" placeholder="Nama sales / PIC"></div>
 <div><label>Tanggal Penawaran</label><input type="date" name="tanggal" value="{{ quotation['tanggal'] or '' }}" required></div>
 <div><label>Berlaku Sampai</label><input type="date" name="berlaku_sampai" value="{{ quotation['berlaku_sampai'] or '' }}"></div>
@@ -62,9 +61,7 @@ table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{border:1px so
 </main>
 
 <template id="rowTemplate"><tr>
-<td><select name="product_id[]" class="product" required><option value="">Pilih produk</option>
-{% for product in products %}<option value="{{ product['id'] }}" data-price="{{ product['harga_jual_default'] or 0 }}">{{ product['kode_produk'] or '-' }} — {{ product['nama_produk'] }}{% if product['brand_nama'] %} | {{ product['brand_nama'] }}{% endif %}{% if product['ukuran_nama'] %} | {{ product['ukuran_nama'] }}{% endif %}</option>{% endfor %}
-</select></td>
+<td class="product-cell"><div class="autocomplete"><input type="search" class="product-search" placeholder="Cari SKU, nama, kategori, brand, varian..." autocomplete="off"><input type="hidden" name="product_id[]" class="product-id" required><div class="product-results autocomplete-results" hidden></div><div class="product-selected selected-master" hidden></div></div></td>
 <td><input class="qty" type="number" min="1" name="qty[]" value="1" required></td>
 <td><input class="price" name="harga_satuan[]" value="0" required></td>
 <td><input class="discount" name="diskon_item[]" value="0"></td>
@@ -72,23 +69,7 @@ table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{border:1px so
 <td><button class="btn red remove" type="button">×</button></td>
 </tr></template>
 
-<script>
-const rows=document.getElementById("rows"),tpl=document.getElementById("rowTemplate"),globalDiscount=document.getElementById("globalDiscount"),identityRadios=document.querySelectorAll('input[name="identity_id"]'),taxNotice=document.getElementById("taxNotice"),dppRow=document.getElementById("dppRow"),ppnRow=document.getElementById("ppnRow");
-function val(v){return Number(String(v||"0").replace(/[^0-9]/g,""))||0}function rp(v){return"Rp "+Math.max(v,0).toLocaleString("id-ID")}
-function isDenkoTax(){let selected=document.querySelector('input[name="identity_id"]:checked');return selected&&selected.dataset.identityType==="QUOTATION_ONLY"}
-function calc(){let subtotal=0;rows.querySelectorAll("tr").forEach(r=>{let total=Math.max(val(r.querySelector(".qty").value)*val(r.querySelector(".price").value)-val(r.querySelector(".discount").value),0);r.querySelector(".rowTotal").textContent=rp(total);subtotal+=total});let dpp=Math.max(subtotal-val(globalDiscount.value),0),withPpn=isDenkoTax(),ppn=withPpn?Math.round(dpp*11/100):0;document.getElementById("subtotal").textContent=rp(subtotal);document.getElementById("dpp").textContent=rp(dpp);document.getElementById("ppn").textContent=rp(ppn);document.getElementById("grand").textContent=rp(dpp+ppn);dppRow.hidden=!withPpn;ppnRow.hidden=!withPpn;taxNotice.classList.toggle("ppn",withPpn);taxNotice.textContent=withPpn?"PPN 11% diterapkan otomatis dan tidak dapat dinonaktifkan.":"Tanpa PPN."}
-function bind(r){r.querySelector(".product").addEventListener("change",e=>{let o=e.target.options[e.target.selectedIndex];r.querySelector(".price").value=o.dataset.price||0;calc()});r.querySelectorAll("input").forEach(i=>i.addEventListener("input",calc));r.querySelector(".remove").addEventListener("click",()=>{if(rows.children.length===1)return alert("Minimal satu produk.");r.remove();calc()})}
-function add(data={}){let fragment=tpl.content.cloneNode(true);let r=fragment.querySelector("tr");rows.appendChild(fragment);bind(r);if(data.product_id){r.querySelector(".product").value=String(data.product_id)}r.querySelector(".qty").value=data.qty||1;r.querySelector(".price").value=data.harga_satuan||0;r.querySelector(".discount").value=data.diskon_item||0;calc()}
-document.getElementById("addRow").addEventListener("click",()=>add());globalDiscount.addEventListener("input",calc);identityRadios.forEach(r=>r.addEventListener("change",calc));
-const presets={
-tempat_sampah:{catatan:"Produk tempat sampah sesuai spesifikasi yang tercantum pada penawaran.",terms:"Harga belum termasuk ongkos kirim apabila tidak disebutkan.\nWarna dan ketersediaan stok mengikuti konfirmasi terakhir.\nLead time mengikuti jumlah pesanan dan ketersediaan barang.\nGaransi mengikuti ketentuan pabrikan."},
-tangga:{catatan:"Produk tangga sesuai merk, ukuran, steps dan varian yang tercantum.",terms:"Harga belum termasuk ongkos kirim apabila tidak disebutkan.\nSpesifikasi tinggi dan jumlah steps mengikuti produk yang dipilih.\nGaransi mengikuti ketentuan pabrikan.\nPenawaran berlaku sampai tanggal yang tercantum."},
-project:{catatan:"Penawaran untuk kebutuhan project sesuai jumlah dan spesifikasi yang disepakati.",terms:"Harga dan jadwal pengiriman mengikuti kesepakatan project.\nPembayaran sesuai termin yang disepakati.\nPerubahan jumlah atau spesifikasi dapat memengaruhi harga.\nPenawaran berlaku sampai tanggal yang tercantum."}};
-document.querySelectorAll("[data-preset]").forEach(b=>b.addEventListener("click",()=>{let p=presets[b.dataset.preset];document.getElementById("catatan").value=p.catatan;document.getElementById("terms").value=p.terms}));
-const initialItems={{ items|map('dict')|list|tojson if false else '[]' }};
-{% for item in items %}
-add({product_id:{{ item["product_id"] or 0 }},qty:{{ item["qty"] or 1 }},harga_satuan:{{ item["harga_satuan"] or 0 }},diskon_item:{{ item["diskon_item"] or 0 }}});
-{% endfor %}
-{% if not items %}add();{% endif %}
-</script>
+<script id="selectedCustomerData" type="application/json">{{ selected_customer|tojson }}</script>
+<script id="initialQuotationItems" type="application/json">{{ initial_items|tojson }}</script>
+<script src="{{ url_for('static', filename='js/quotation_form.js') }}"></script>
 </body></html>
