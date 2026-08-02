@@ -70,6 +70,21 @@
             overflow-x: auto;
         }
 
+        .search-form {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 18px;
+        }
+
+        .search-form input {
+            flex: 1;
+            min-width: 220px;
+            padding: 11px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 7px;
+            font: inherit;
+        }
+
         table {
             width: 100%;
             border-collapse: collapse;
@@ -132,6 +147,10 @@
                     Dashboard
                 </a>
 
+                <a href="{{ url_for('import_products') }}" class="btn btn-secondary">
+                    Import XLSX
+                </a>
+
                 <a href="{{ url_for('add_product') }}" class="btn btn-primary">
                     + Tambah Produk
                 </a>
@@ -139,15 +158,32 @@
         </div>
 
         <div class="card">
+            <form method="get" action="{{ url_for('products') }}" class="search-form">
+                <input
+                    type="search"
+                    name="keyword"
+                    value="{{ keyword }}"
+                    placeholder="Cari kode, nama, kategori, brand, varian, warna, ukuran, atau steps"
+                    aria-label="Cari master produk"
+                >
+                <button type="submit" class="btn btn-primary">Cari</button>
+                {% if keyword %}
+                    <a href="{{ url_for('products') }}" class="btn btn-secondary">Reset</a>
+                {% endif %}
+            </form>
+
             <table>
                 <thead>
                     <tr>
                         <th>Kode</th>
                         <th>Nama Produk</th>
                         <th>Kategori</th>
+                        <th>Brand</th>
+                        <th>Subkategori / Jenis</th>
                         <th>Varian</th>
                         <th>Warna</th>
                         <th>Ukuran</th>
+                        <th>Steps</th>
                         <th>Satuan</th>
                         <th class="harga">Harga Jual</th>
                         <th class="harga">Harga Modal</th>
@@ -161,10 +197,13 @@
                         <tr>
                             <td>{{ product["kode_produk"] or "-" }}</td>
                             <td>{{ product["nama_produk"] }}</td>
-                            <td>{{ product["kategori"] or "-" }}</td>
-                            <td>{{ product["varian"] or "-" }}</td>
-                            <td>{{ product["warna"] or "-" }}</td>
-                            <td>{{ product["ukuran"] or "-" }}</td>
+                            <td>{{ product["kategori_nama"] or "-" }}</td>
+                            <td>{{ product["brand_nama"] or "-" }}</td>
+                            <td>{{ product["subkategori"] or product["jenis_produk"] or "-" }}</td>
+                            <td>{{ product["varian_nama"] or "-" }}</td>
+                            <td>{{ product["warna_nama"] or "-" }}</td>
+                            <td>{{ product["ukuran_nama"] or "-" }}</td>
+                            <td>{{ product["steps"] or "-" }}</td>
                             <td>{{ product["satuan"] }}</td>
 
                             <td class="harga">
@@ -186,7 +225,7 @@
                         {% endfor %}
                     {% else %}
                         <tr>
-                            <td colspan="10" class="empty">
+                            <td colspan="13" class="empty">
                                 Belum ada produk di Master Produk.
                             </td>
                         </tr>

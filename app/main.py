@@ -1,5 +1,6 @@
 import base64
 import binascii
+import hashlib
 import hmac
 import io
 import sqlite3
@@ -19,6 +20,14 @@ from customer_import import (
     sha256_bytes,
 )
 from database import create_tables, get_connection
+from product_import import (
+    MAX_IMPORT_FILE_SIZE,
+    ProductImportError,
+    analyze_product_rows,
+    import_product_rows,
+    parse_product_workbook,
+    summarize_rows,
+)
 
 try:
     import qrcode
@@ -1795,9 +1804,28 @@ def edit_customer(customer_id):
 @app.route("/products")
 def products():
     conn = get_connection()
+    keyword = request.args.get("keyword", "").strip()
+
+    where_clause = ""
+    parameters = ()
+    if keyword:
+        where_clause = """
+        WHERE products.kode_produk LIKE ?
+           OR products.nama_produk LIKE ?
+           OR product_categories.nama LIKE ?
+           OR product_brands.nama LIKE ?
+           OR product_variants.nama LIKE ?
+           OR product_colors.nama LIKE ?
+           OR product_sizes.nama LIKE ?
+           OR products.subkategori LIKE ?
+           OR products.jenis_produk LIKE ?
+           OR products.steps LIKE ?
+        """
+        like_keyword = f"%{keyword}%"
+        parameters = (like_keyword,) * 10
 
     daftar_produk = conn.execute(
-        """
+        f"""
         SELECT
             products.*,
             product_categories.nama AS kategori_nama,
@@ -1833,12 +1861,15 @@ def products():
             ON products.supplier_id =
                suppliers.id
 
+        {where_clause}
+
         ORDER BY
             kategori_nama,
             products.nama_produk,
             warna_nama,
             ukuran_nama
-        """
+        """,
+        parameters,
     ).fetchall()
 
     conn.close()
@@ -1846,7 +1877,150 @@ def products():
     return render_template(
         "products.html",
         products=daftar_produk,
+        keyword=keyword,
     )
+
+
+def decode_product_import_payload(payload, expected_digest):
+    """Validasi payload preview sebelum file diproses ulang saat konfirmasi."""
+    if not payload or len(payload) > MAX_IMPORT_FILE_SIZE * 2:
+        raise ProductImportError("Payload import tidak valid atau terlalu besar.")
+
+    try:
+        file_bytes = base64.b64decode(payload, validate=True)
+    except (binascii.Error, ValueError) as error:
+        raise ProductImportError("Payload import tidak valid.") from error
+
+    if len(file_bytes) > MAX_IMPORT_FILE_SIZE:
+        raise ProductImportError("Ukuran file melebihi batas 5 MB.")
+
+    actual_digest = hashlib.sha256(file_bytes).hexdigest()
+    if not hmac.compare_digest(actual_digest, expected_digest or ""):
+        raise ProductImportError(
+            "File preview berubah. Silakan unggah dan preview ulang."
+        )
+
+    return file_bytes
+
+
+def build_product_import_report(filename, digest, summary, rows):
+    """Buat laporan Markdown yang dapat diunduh dari halaman hasil import."""
+    lines = [
+        "# Laporan Import Master Produk",
+        "",
+        f"- Waktu: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        f"- File: {filename or 'MASTER PRODUK.xlsx'}",
+        f"- SHA-256: `{digest}`",
+        f"- Total baris dibaca: {summary['total']}",
+        f"- Produk dibuat: {summary.get('created', 0)}",
+        f"- Produk dilewati: {summary.get('skipped', 0)}",
+        f"- Duplicate: {summary['duplicate']}",
+        f"- Warning: {summary['warning']}",
+        f"- Error: {summary['error']}",
+        "",
+        "## Baris yang tidak dibuat",
+        "",
+    ]
+    skipped_rows = [
+        row for row in rows if row["status"] in {"duplicate", "error"}
+    ]
+    if not skipped_rows:
+        lines.append("Tidak ada.")
+    else:
+        for row in skipped_rows:
+            messages = row["errors"] or [row["duplicate_message"]]
+            lines.append(
+                f"- {row['source_group']} baris {row['source_row']} — "
+                f"{row['nama_produk'] or '-'}: {'; '.join(messages)}"
+            )
+
+    return "\n".join(lines) + "\n"
+
+
+@app.route(
+    "/products/import",
+    methods=["GET", "POST"],
+)
+def import_products():
+    context = {
+        "rows": None,
+        "summary": None,
+        "error_message": None,
+        "file_payload": None,
+        "file_digest": None,
+        "filename": None,
+        "import_completed": False,
+        "report_markdown": None,
+    }
+
+    if request.method == "GET":
+        return render_template("product_import.html", **context)
+
+    action = request.form.get("action", "preview").strip().lower()
+
+    try:
+        if action == "preview":
+            uploaded_file = request.files.get("product_file")
+            if uploaded_file is None or not uploaded_file.filename:
+                raise ProductImportError("File XLSX wajib dipilih.")
+            if not uploaded_file.filename.lower().endswith(".xlsx"):
+                raise ProductImportError("File harus menggunakan format .xlsx.")
+
+            file_bytes = uploaded_file.read(MAX_IMPORT_FILE_SIZE + 1)
+            if len(file_bytes) > MAX_IMPORT_FILE_SIZE:
+                raise ProductImportError("Ukuran file melebihi batas 5 MB.")
+            filename = secure_filename(uploaded_file.filename)
+        elif action == "confirm":
+            file_bytes = decode_product_import_payload(
+                request.form.get("file_payload", ""),
+                request.form.get("file_digest", ""),
+            )
+            filename = secure_filename(
+                request.form.get("filename", "MASTER PRODUK.xlsx")
+            )
+        else:
+            raise ProductImportError("Aksi import tidak dikenal.")
+
+        rows = parse_product_workbook(file_bytes)
+        digest = hashlib.sha256(file_bytes).hexdigest()
+        context.update(
+            {
+                "file_payload": base64.b64encode(file_bytes).decode("ascii"),
+                "file_digest": digest,
+                "filename": filename,
+            }
+        )
+
+        conn = get_connection()
+        try:
+            if action == "confirm":
+                analyzed_rows, summary = import_product_rows(conn, rows)
+                context["import_completed"] = True
+                context["report_markdown"] = build_product_import_report(
+                    filename,
+                    digest,
+                    summary,
+                    analyzed_rows,
+                )
+            else:
+                analyzed_rows = analyze_product_rows(conn, rows)
+                summary = summarize_rows(analyzed_rows)
+        finally:
+            conn.close()
+
+        context["rows"] = analyzed_rows
+        context["summary"] = summary
+        return render_template("product_import.html", **context)
+
+    except ProductImportError as error:
+        context["error_message"] = str(error)
+        return render_template("product_import.html", **context), 400
+    except sqlite3.Error:
+        context["error_message"] = (
+            "Import gagal karena kesalahan database. Seluruh perubahan telah "
+            "di-rollback."
+        )
+        return render_template("product_import.html", **context), 500
 
 
 @app.route(

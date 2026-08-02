@@ -303,6 +303,10 @@ def create_tables():
             harga_jual_default INTEGER NOT NULL DEFAULT 0,
             harga_modal_default INTEGER NOT NULL DEFAULT 0,
 
+            subkategori TEXT,
+            jenis_produk TEXT,
+            steps TEXT,
+
             status_aktif INTEGER NOT NULL DEFAULT 1,
 
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -399,6 +403,27 @@ def create_tables():
         "products",
         "harga_modal_default",
         "INTEGER NOT NULL DEFAULT 0",
+    )
+
+    ensure_column(
+        conn,
+        "products",
+        "subkategori",
+        "TEXT",
+    )
+
+    ensure_column(
+        conn,
+        "products",
+        "jenis_produk",
+        "TEXT",
+    )
+
+    ensure_column(
+        conn,
+        "products",
+        "steps",
+        "TEXT",
     )
 
     ensure_column(
