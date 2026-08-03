@@ -560,6 +560,18 @@
                     </div>
                 </div>
 
+                <div class="info-box">
+                    <span class="info-label">Tipe Data</span>
+                    <div class="info-value">
+                        {% if transaction['is_test'] %}
+                            <span class="badge">TRANSAKSI UJI COBA</span>
+                            {% if transaction['test_label'] %}<div>{{ transaction['test_label'] }}</div>{% endif %}
+                        {% else %}
+                            Transaksi Bisnis
+                        {% endif %}
+                    </div>
+                </div>
+
             </div>
         </div>
 
@@ -575,12 +587,29 @@
                 {% if transaction['status'] == 'Cancelled' and workflow_revision['can_unlock']['allowed'] %}
                 <form method="post" action="{{ url_for('unlock_transaction_quotation', transaction_id=transaction['id']) }}" onsubmit="return confirm('Unlock quotation untuk revisi?');"><button class="btn btn-primary" type="submit">Unlock Quotation</button></form>
                 {% endif %}
+                {% if not transaction['is_test'] and mark_test_eligibility['allowed'] %}
+                <button class="btn btn-secondary" type="button" onclick="document.getElementById('mark-test-dialog').showModal()">Tandai Sebagai Transaksi Uji Coba</button>
+                {% endif %}
+                {% if transaction['is_test'] and purge_eligibility['allowed'] %}
+                <button class="btn btn-danger" type="button" onclick="document.getElementById('purge-test-dialog').showModal()">Hapus Transaksi Uji Coba</button>
+                {% endif %}
             </div>
             {% if not workflow_revision['can_cancel']['allowed'] and transaction['status'] != 'Cancelled' and workflow_revision['can_cancel']['message'] %}<div class="workflow-alert">{{ workflow_revision['can_cancel']['message'] }}</div>{% endif %}
             {% if transaction['status'] == 'Cancelled' and not workflow_revision['can_unlock']['allowed'] and workflow_revision['can_unlock']['message'] %}<div class="workflow-alert">{{ workflow_revision['can_unlock']['message'] }}</div>{% endif %}
+            {% if transaction['is_test'] and not purge_eligibility['allowed'] %}<div class="workflow-alert"><strong>Purge ditolak:</strong>
+{% for reason in purge_eligibility['reasons'] %}• {{ reason }}
+{% endfor %}</div>{% endif %}
         </div>
 
         <dialog id="cancel-dialog"><div class="dialog-body"><h2>Batalkan Transaction</h2><p>Nomor Transaction: <strong>{{ transaction['nomor_transaksi'] }}</strong></p><form method="post" action="{{ url_for('cancel_transaction_workflow', transaction_id=transaction['id']) }}"><label for="cancel-reason"><strong>Alasan Pembatalan</strong></label><textarea id="cancel-reason" name="reason" required></textarea><div class="dialog-actions"><button class="btn btn-secondary" type="button" onclick="document.getElementById('cancel-dialog').close()">Kembali</button><button class="btn btn-danger" type="submit">Cancel</button></div></form></div></dialog>
+
+        {% if not transaction['is_test'] and mark_test_eligibility['allowed'] %}
+        <dialog id="mark-test-dialog"><div class="dialog-body"><h2>Tandai Sebagai Transaksi Uji Coba</h2><p><strong>{{ transaction['nomor_transaksi'] }}</strong></p><p>Tindakan ini tidak menghapus data. Setelah ditandai, purge tetap melalui pemeriksaan ulang.</p><form method="post" action="{{ url_for('mark_transaction_as_test', transaction_id=transaction['id']) }}"><label for="mark-test-reason"><strong>Alasan Penandaan</strong></label><textarea id="mark-test-reason" name="reason" required></textarea><div class="dialog-actions"><button class="btn btn-secondary" type="button" onclick="document.getElementById('mark-test-dialog').close()">Kembali</button><button class="btn btn-danger" type="submit">Tandai Uji Coba</button></div></form></div></dialog>
+        {% endif %}
+
+        {% if transaction['is_test'] and purge_eligibility['allowed'] %}
+        <dialog id="purge-test-dialog"><div class="dialog-body"><h2>Hapus Transaksi Uji Coba</h2><p>Hard delete hanya untuk transaksi test yang terisolasi.</p><div class="info-grid"><div class="info-box"><span class="info-label">Nomor</span><div class="info-value">{{ transaction['nomor_transaksi'] }}</div></div><div class="info-box"><span class="info-label">Customer</span><div class="info-value">{{ transaction['customer_nama'] or '-' }}</div></div><div class="info-box"><span class="info-label">Tanggal</span><div class="info-value">{{ transaction['tanggal'] }}</div></div><div class="info-box"><span class="info-label">Total</span><div class="info-value">{{ format_rupiah(transaction['total_penjualan']) }}</div></div><div class="info-box"><span class="info-label">Status</span><div class="info-value">{{ transaction['status'] }}</div></div></div><form method="post" action="{{ url_for('purge_transaction_test', transaction_id=transaction['id']) }}"><label for="purge-reason"><strong>Alasan Penghapusan</strong></label><textarea id="purge-reason" name="reason" required></textarea><label for="confirmation-number"><strong>Ketik nomor transaksi persis</strong></label><input id="confirmation-number" name="confirmation_number" required autocomplete="off"><label for="purged-by"><strong>Nama Pelaksana</strong></label><input id="purged-by" name="purged_by" value="Admin" required><div class="dialog-actions"><button class="btn btn-secondary" type="button" onclick="document.getElementById('purge-test-dialog').close()">Kembali</button><button class="btn btn-danger" type="submit">Hapus Permanen</button></div></form></div></dialog>
+        {% endif %}
 
 
         <div class="card">
