@@ -64,11 +64,11 @@ def get_customer_360(conn, customer_id, *, year=None, product=None, status=None)
         SELECT COUNT(*) AS total_history,
                SUM(CASE WHEN total IS NOT NULL THEN 1 ELSE 0 END) AS priced_history,
                COALESCE(SUM(CASE WHEN total IS NOT NULL THEN total ELSE 0 END), 0) AS omzet,
-               MIN(CASE WHEN total IS NOT NULL THEN tanggal_pembelian END) AS order_pertama,
-               MAX(CASE WHEN total IS NOT NULL THEN tanggal_pembelian END) AS order_terakhir,
+               MIN(tanggal_pembelian) AS order_pertama,
+               MAX(tanggal_pembelian) AS order_terakhir,
                COALESCE(SUM(qty), 0) AS units
         FROM customer_purchase_history
-        WHERE customer_id = ? AND active = 1
+        WHERE customer_id = ? AND active = 1 AND COALESCE(qty, 0) > 0
         """,
         (customer_id,),
     )
@@ -117,8 +117,7 @@ def get_customer_360(conn, customer_id, *, year=None, product=None, status=None)
     )
 
     transaction_count = int(transaction_summary["total_transaction"] or 0)
-    priced_history = int(historical_summary["priced_history"] or 0)
-    repeat_orders = transaction_count + priced_history
+    repeat_orders = transaction_count + int(historical_summary["total_history"] or 0)
     turnover = int(transaction_summary["omzet"] or 0) + int(historical_summary["omzet"] or 0)
     dates = [d for d in (
         transaction_summary["order_pertama"], historical_summary["order_pertama"]
