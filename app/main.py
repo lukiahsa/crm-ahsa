@@ -21,6 +21,7 @@ from customer_import import (
     sha256_bytes,
 )
 from database import create_tables, get_connection
+from dashboard_bi import build_executive_dashboard
 from customer_360 import (
     add_historical_purchase,
     add_note,
@@ -1426,47 +1427,17 @@ def api_product_search():
 # DASHBOARD
 # ==========================================================
 @app.route("/")
+@app.route("/dashboard")
 def dashboard():
     conn = get_connection()
-
-    total_customer = conn.execute(
-        """
-        SELECT COUNT(*)
-        FROM customers
-        """
-    ).fetchone()[0]
-
-    prospek_aktif = conn.execute(
-        """
-        SELECT COUNT(*)
-        FROM customers
-        WHERE status IN (
-            'Prospek',
-            'Follow Up',
-            'Penawaran'
-        )
-        """
-    ).fetchone()[0]
-
-    customer_closing = conn.execute(
-        """
-        SELECT COUNT(*)
-        FROM customers
-        WHERE status IN (
-            'Closing',
-            'Existing Customer',
-            'Repeat Customer'
-        )
-        """
-    ).fetchone()[0]
-
-    conn.close()
-
+    try:
+        dashboard_data = build_executive_dashboard(conn, request.args)
+    finally:
+        conn.close()
     return render_template(
         "dashboard.html",
-        total_customer=total_customer,
-        prospek_aktif=prospek_aktif,
-        customer_closing=customer_closing,
+        dashboard=dashboard_data,
+        format_rupiah=format_rupiah,
     )
 
 

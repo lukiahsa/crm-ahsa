@@ -3,107 +3,154 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard CRM Ahsa</title>
-
+    <title>Executive Dashboard · CRM Ahsa Equipment</title>
     <style>
-        body {
-            margin: 0;
-            font-family: Arial, sans-serif;
-            background: #f4f6f9;
-            color: #1f2937;
-        }
-
-        header {
-            background: #17466f;
-            color: white;
-            padding: 24px 36px;
-        }
-
-        header h1 {
-            margin: 0 0 8px;
-        }
-
-        nav {
-            margin-top: 18px;
-        }
-
-        nav a {
-            color: white;
-            text-decoration: none;
-            margin-right: 22px;
-            font-weight: bold;
-        }
-
-        main {
-            max-width: 1100px;
-            margin: 36px auto;
-            padding: 0 20px;
-        }
-
-        .cards {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 18px;
-            margin-top: 28px;
-        }
-
-        .card {
-            background: white;
-            padding: 24px;
-            border-radius: 12px;
-            box-shadow: 0 3px 12px rgba(0, 0, 0, 0.08);
-        }
-
-        .card h2 {
-            margin: 0;
-            color: #17466f;
-            font-size: 34px;
-        }
-
-        .card p {
-            margin-bottom: 0;
-            color: #6b7280;
-        }
-
-        @media (max-width: 760px) {
-            .cards {
-                grid-template-columns: 1fr;
-            }
-        }
+        :root { color-scheme: light dark; --brand:#17466f; --brand2:#256b9e; --bg:#f3f6fa; --panel:#fff; --text:#172033; --muted:#667085; --line:#dce4ed; --good:#087a55; --warn:#b54708; --danger:#b42318; --soft:#eaf2f8; }
+        * { box-sizing:border-box; }
+        body { margin:0; font-family:Inter,Arial,sans-serif; background:var(--bg); color:var(--text); }
+        header { background:linear-gradient(125deg,#123c60,#1d5b89); color:white; padding:22px clamp(18px,4vw,48px); }
+        .header-row,.section-head { display:flex; align-items:center; justify-content:space-between; gap:20px; flex-wrap:wrap; }
+        h1 { margin:0; font-size:clamp(24px,3vw,34px); }
+        header p { margin:6px 0 0; opacity:.82; }
+        nav { display:flex; gap:9px; flex-wrap:wrap; margin-top:18px; }
+        nav a { color:white; text-decoration:none; padding:8px 11px; border-radius:7px; background:rgba(255,255,255,.08); font-size:13px; font-weight:700; }
+        nav a:hover { background:rgba(255,255,255,.2); }
+        main { max-width:1540px; margin:24px auto 54px; padding:0 clamp(14px,3vw,32px); }
+        .filter-panel,.panel,.kpi { background:var(--panel); border:1px solid var(--line); border-radius:13px; box-shadow:0 5px 18px rgba(16,42,67,.055); }
+        .filter-panel { padding:16px; margin-bottom:22px; }
+        .filters { display:grid; grid-template-columns:repeat(7,minmax(130px,1fr)); gap:10px; align-items:end; }
+        label { display:block; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin-bottom:5px; }
+        select,input { width:100%; border:1px solid var(--line); border-radius:8px; padding:9px 10px; background:var(--panel); color:var(--text); }
+        button,.button { border:0; border-radius:8px; background:var(--brand); color:white; padding:10px 15px; font-weight:800; cursor:pointer; text-decoration:none; display:inline-block; text-align:center; }
+        .button.secondary { background:var(--soft); color:var(--brand); }
+        .date-fields { display:contents; }
+        .context { color:var(--muted); font-size:13px; margin:11px 0 0; }
+        .section-head { margin:28px 0 12px; }
+        .section-head h2 { margin:0; font-size:20px; }
+        .section-head span { color:var(--muted); font-size:13px; }
+        .kpi-grid { display:grid; grid-template-columns:repeat(7,minmax(145px,1fr)); gap:11px; }
+        .kpi { padding:15px; min-height:105px; position:relative; overflow:hidden; }
+        .kpi:after { content:""; width:45px; height:45px; border-radius:50%; background:var(--soft); position:absolute; right:-13px; top:-13px; }
+        .kpi small { display:block; min-height:30px; color:var(--muted); font-size:12px; font-weight:700; }
+        .kpi strong { display:block; font-size:clamp(18px,2vw,24px); margin-top:8px; color:var(--brand); overflow-wrap:anywhere; }
+        .grid-2 { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+        .grid-3 { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
+        .panel { padding:17px; overflow:hidden; }
+        .panel h3 { margin:0 0 14px; font-size:16px; }
+        .mini-grid { display:grid; grid-template-columns:repeat(4,minmax(100px,1fr)); gap:9px; margin-bottom:14px; }
+        .mini { background:var(--soft); border-radius:9px; padding:11px; }
+        .mini small { display:block; color:var(--muted); min-height:28px; font-size:11px; }
+        .mini strong { color:var(--brand); font-size:17px; }
+        .table-wrap { overflow-x:auto; }
+        table { width:100%; border-collapse:collapse; font-size:12px; white-space:nowrap; }
+        th { color:var(--muted); text-transform:uppercase; letter-spacing:.03em; font-size:10px; text-align:left; background:var(--soft); }
+        th,td { padding:9px 10px; border-bottom:1px solid var(--line); }
+        td.money { text-align:right; font-variant-numeric:tabular-nums; }
+        td a { color:var(--brand2); font-weight:700; text-decoration:none; }
+        .empty { text-align:center; color:var(--muted); padding:22px; }
+        .chart { height:285px; position:relative; }
+        .funnel { display:grid; grid-template-columns:repeat(8,minmax(95px,1fr)); gap:7px; }
+        .stage { padding:13px 8px; border-radius:9px; text-align:center; background:var(--soft); border-bottom:4px solid var(--brand2); }
+        .stage strong { display:block; font-size:22px; color:var(--brand); }
+        .stage small { display:block; color:var(--muted); margin:4px 0; }
+        .badge { display:inline-flex; padding:4px 8px; border-radius:999px; font-size:10px; font-weight:800; background:var(--soft); color:var(--brand); }
+        .badge.danger { background:#fee4e2; color:var(--danger); }
+        .alert-count { background:#fee4e2; color:var(--danger); border-radius:999px; padding:4px 9px; font-size:12px; font-weight:800; }
+        .activity { list-style:none; padding:0; margin:0; }
+        .activity li { padding:10px 0; border-bottom:1px solid var(--line); display:grid; grid-template-columns:125px 1fr auto; gap:10px; align-items:start; }
+        .activity p { margin:2px 0; font-size:12px; }
+        .activity time { color:var(--muted); font-size:10px; white-space:nowrap; }
+        .rank { display:flex; gap:10px; align-items:center; padding:9px 0; border-bottom:1px solid var(--line); }
+        .rank > b { background:var(--soft); color:var(--brand); width:27px; height:27px; border-radius:50%; display:grid; place-items:center; }
+        .rank div { min-width:0; flex:1; }
+        .rank div strong,.rank div small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .rank small { color:var(--muted); margin-top:2px; }
+        footer { color:var(--muted); text-align:center; font-size:11px; margin-top:28px; }
+        @media(max-width:1200px){ .filters{grid-template-columns:repeat(4,1fr)} .kpi-grid{grid-template-columns:repeat(4,1fr)} .funnel{grid-template-columns:repeat(4,1fr)} }
+        @media(max-width:800px){ .grid-2,.grid-3{grid-template-columns:1fr} .filters{grid-template-columns:repeat(2,1fr)} .kpi-grid{grid-template-columns:repeat(2,1fr)} .mini-grid{grid-template-columns:repeat(2,1fr)} .activity li{grid-template-columns:100px 1fr}.activity time{grid-column:2} }
+        @media(max-width:480px){ .filters,.kpi-grid,.funnel{grid-template-columns:1fr} }
+        @media(prefers-color-scheme:dark){ :root{--bg:#0f1722;--panel:#182231;--text:#eef4fa;--muted:#a9b5c3;--line:#2b3b4d;--soft:#213248;--brand:#8dc9f3;--brand2:#70b8ea;--good:#6ce9ba;--warn:#fec84b;--danger:#fda29b} .filter-panel,.panel,.kpi{box-shadow:none}.badge.danger,.alert-count{background:#4a2528} }
     </style>
 </head>
-
 <body>
-    <header>
-        <h1>CRM AHSA EQUIPMENT</h1>
-        <p>Dashboard Penjualan dan Database Customer</p>
+{% set d = dashboard %}
+<header>
+    <div class="header-row"><div><h1>Executive Dashboard</h1><p>CRM AHSA EQUIPMENT · insight bisnis untuk Owner</p></div><div><span class="badge">READ ONLY</span></div></div>
+    <nav>
+        <a href="/dashboard">Dashboard</a><a href="/customers">Customer</a><a href="/products">Produk</a>
+        <a href="/quotations">Quotation</a><a href="/transactions">Transaction</a><a href="/receipts">Receipt</a>
+        <a href="/delivery-orders">Delivery</a><a href="/purchase-orders">Purchase</a><a href="/stocks">Stock</a>
+    </nav>
+</header>
+<main>
+    <form class="filter-panel" method="get" action="/dashboard">
+        <div class="filters">
+            <div><label for="period">Periode</label><select id="period" name="period"><option value="day" {% if d.filters.period=='day' %}selected{% endif %}>Hari</option><option value="week" {% if d.filters.period=='week' %}selected{% endif %}>Minggu</option><option value="month" {% if d.filters.period=='month' %}selected{% endif %}>Bulan</option><option value="year" {% if d.filters.period=='year' %}selected{% endif %}>Tahun</option><option value="custom" {% if d.filters.period=='custom' %}selected{% endif %}>Custom Range</option></select></div>
+            <div><label for="start_date">Mulai</label><input id="start_date" type="date" name="start_date" value="{{ d.filters.start_date }}"></div>
+            <div><label for="end_date">Selesai</label><input id="end_date" type="date" name="end_date" value="{{ d.filters.end_date }}"></div>
+            <div><label for="sales">Sales</label><select id="sales" name="sales"><option value="">Semua Sales</option>{% for value in d.filter_options.sales %}<option value="{{ value }}" {% if d.filters.sales==value %}selected{% endif %}>{{ value }}</option>{% endfor %}</select></div>
+            <div><label for="customer_id">Customer</label><select id="customer_id" name="customer_id"><option value="">Semua Customer</option>{% for item in d.filter_options.customers %}<option value="{{ item.id }}" {% if d.filters.customer_id==item.id %}selected{% endif %}>{{ item.nama }}</option>{% endfor %}</select></div>
+            <div><label for="product_id">Produk</label><select id="product_id" name="product_id"><option value="">Semua Produk</option>{% for item in d.filter_options.products %}<option value="{{ item.id }}" {% if d.filters.product_id==item.id %}selected{% endif %}>{{ item.kode_produk or '-' }} · {{ item.nama_produk }}</option>{% endfor %}</select></div>
+            <div><label for="category_id">Kategori</label><select id="category_id" name="category_id"><option value="">Semua Kategori</option>{% for item in d.filter_options.categories %}<option value="{{ item.id }}" {% if d.filters.category_id==item.id %}selected{% endif %}>{{ item.nama }}</option>{% endfor %}</select></div>
+            <button type="submit">Terapkan Filter</button><a class="button secondary" href="/dashboard">Reset</a>
+        </div>
+        <p class="context">Data operasional {{ d.filters.start_date }} s.d. {{ d.filters.end_date }}. KPI Hari/Bulan/Tahun selalu memakai kalender berjalan dan tetap mengikuti filter dimensi.</p>
+    </form>
 
-        <nav>
-            <a href="/">Dashboard</a>
-            <a href="/customers">Customer</a>
-        </nav>
-    </header>
+    <div class="section-head"><h2>Executive KPI</h2><span>Ringkasan keputusan utama</span></div>
+    {% set cards=[('Omzet Hari Ini',format_rupiah(d.kpis.revenue_today)),('Omzet Bulan Ini',format_rupiah(d.kpis.revenue_month)),('Omzet Tahun Ini',format_rupiah(d.kpis.revenue_year)),('Margin Bulan Ini',format_rupiah(d.kpis.margin_month)),('Laba Bersih Bulan Ini',format_rupiah(d.kpis.net_profit_month)),('Customer Baru',d.kpis.new_customer),('Repeat Customer',d.kpis.repeat_customer),('Quotation Aktif',d.kpis.active_quotation),('Quotation Deal',d.kpis.deal_quotation),('Invoice Outstanding',d.kpis.outstanding_invoice),('Total Piutang',format_rupiah(d.kpis.receivable)),('Purchase Outstanding',d.kpis.purchase_outstanding),('Stock Value',format_rupiah(d.kpis.stock_value)),('Stock Hampir Habis',d.kpis.low_stock)] %}
+    <section class="kpi-grid">{% for label,value in cards %}<article class="kpi"><small>{{ label }}</small><strong>{{ value }}</strong></article>{% endfor %}</section>
 
-    <main>
-        <h2>Dashboard</h2>
-        <p>Ringkasan database customer Ahsa Equipment.</p>
+    <div class="section-head"><h2>Business Trend</h2><span>12 bulan terakhir</span></div>
+    <section class="grid-2"><article class="panel"><h3>Omzet, Margin & Laba Bersih</h3><div class="chart"><canvas id="trendChart"></canvas></div></article><article class="panel"><h3>Sales Funnel</h3><div class="chart"><canvas id="funnelChart"></canvas></div></article></section>
 
-        <section class="cards">
-            <div class="card">
-                <h2>{{ total_customer }}</h2>
-                <p>Total Customer</p>
-            </div>
+    <div class="section-head"><h2>Sales Performance</h2><span>Per Sales</span></div>
+    <section class="panel"><div class="table-wrap"><table><thead><tr><th>Sales</th><th>Quotation</th><th>Closing</th><th>Conversion</th><th>Omzet</th><th>Margin</th><th>Repeat Customer</th><th>Rata-rata Transaksi</th></tr></thead><tbody>{% for row in d.sales_performance %}<tr><td><strong>{{ row.sales }}</strong></td><td>{{ row.quotation_count }}</td><td>{{ row.closing }}</td><td>{{ row.conversion_rate }}%</td><td class="money">{{ format_rupiah(row.revenue) }}</td><td class="money">{{ format_rupiah(row.margin) }}</td><td>{{ row.repeat_customer }}</td><td class="money">{{ format_rupiah(row.average_transaction) }}</td></tr>{% else %}<tr><td class="empty" colspan="8">Belum ada performa sales pada periode ini.</td></tr>{% endfor %}</tbody></table></div></section>
 
-            <div class="card">
-                <h2>{{ prospek_aktif }}</h2>
-                <p>Prospek Aktif</p>
-            </div>
+    <div class="section-head"><h2>Customer Analytics</h2><span>Nilai dan retensi customer</span></div>
+    <section class="grid-2">
+        <article class="panel"><div class="mini-grid">{% set cm=[('Customer Baru',d.customer.new),('Existing',d.customer.existing),('Repeat',d.customer.repeat),('Platinum',d.customer.platinum),('Gold',d.customer.gold),('Tidak Aktif',d.customer.inactive),('Lama Tidak Order',d.customer.stale|length),('Outstanding',d.customer.outstanding|length)] %}{% for label,value in cm %}<div class="mini"><small>{{ label }}</small><strong>{{ value }}</strong></div>{% endfor %}</div><h3>Top Customer</h3><div class="table-wrap"><table><thead><tr><th>Customer</th><th>Transaksi</th><th>Omzet</th><th>Margin</th><th>Order Terakhir</th></tr></thead><tbody>{% for row in d.customer.top %}<tr><td><a href="/customers/{{ row.id }}">{{ row.nama }}</a><br><small>{{ row.instansi or '-' }}</small></td><td>{{ row.transaction_count }}</td><td class="money">{{ format_rupiah(row.revenue) }}</td><td class="money">{{ format_rupiah(row.margin) }}</td><td>{{ row.last_order }}</td></tr>{% else %}<tr><td class="empty" colspan="5">Belum ada transaksi customer.</td></tr>{% endfor %}</tbody></table></div></article>
+        <article class="panel"><h3>Customer Outstanding</h3><div class="table-wrap"><table><thead><tr><th>Customer</th><th>Invoice</th><th>Piutang</th></tr></thead><tbody>{% for row in d.customer.outstanding %}<tr><td><a href="/customers/{{ row.id }}">{{ row.nama }}</a></td><td>{{ row.invoice_count }}</td><td class="money">{{ format_rupiah(row.outstanding) }}</td></tr>{% else %}<tr><td class="empty" colspan="3">Tidak ada outstanding.</td></tr>{% endfor %}</tbody></table></div><h3 style="margin-top:22px">Lama Tidak Order</h3><div class="table-wrap"><table><thead><tr><th>Customer</th><th>Order Terakhir</th><th>Hari</th></tr></thead><tbody>{% for row in d.customer.stale %}<tr><td><a href="/customers/{{ row.id }}">{{ row.nama }}</a></td><td>{{ row.last_order or 'Belum pernah' }}</td><td>{{ row.inactive_days if row.inactive_days is not none else '-' }}</td></tr>{% else %}<tr><td class="empty" colspan="3">Tidak ada customer stale.</td></tr>{% endfor %}</tbody></table></div></article>
+    </section>
 
-            <div class="card">
-                <h2>{{ customer_closing }}</h2>
-                <p>Customer Closing</p>
-            </div>
-        </section>
-    </main>
+    <div class="section-head"><h2>Product Analytics</h2><span>Demand, margin, dan kategori</span></div>
+    <section class="grid-3">
+        <article class="panel"><h3>Top 10 Produk</h3>{% for row in d.product.top %}<div class="rank"><b>{{ loop.index }}</b><div><strong>{{ row.nama_produk }}</strong><small>{{ row.quantity }} unit · {{ format_rupiah(row.revenue) }}</small></div></div>{% else %}<p class="empty">Belum ada produk terjual.</p>{% endfor %}</article>
+        <article class="panel"><h3>Margin Terbesar</h3>{% for row in d.product.highest_margin %}<div class="rank"><b>{{ loop.index }}</b><div><strong>{{ row.nama_produk }}</strong><small>{{ format_rupiah(row.margin) }} · {{ row.repeat_customer }} repeat</small></div></div>{% else %}<p class="empty">Belum ada margin produk.</p>{% endfor %}<h3 style="margin-top:20px">Tidak Pernah Terjual</h3>{% for row in d.product.never_sold[:5] %}<div class="rank"><b>–</b><div><strong>{{ row.nama_produk }}</strong><small>{{ row.category }}</small></div></div>{% else %}<p class="empty">Semua produk pernah terjual.</p>{% endfor %}</article>
+        <article class="panel"><h3>Penjualan per Kategori</h3><div class="chart"><canvas id="categoryChart"></canvas></div></article>
+    </section>
+
+    <div class="section-head"><h2>Sales Funnel</h2><span>Conversion rate terhadap tahap sebelumnya</span></div>
+    <section class="panel"><div class="funnel">{% for row in d.funnel %}<div class="stage"><strong>{{ row.count }}</strong><small>{{ row.stage }}</small><b>{{ row.conversion_rate }}%</b></div>{% endfor %}</div></section>
+
+    <div class="section-head"><h2>Financial, Purchase & Inventory</h2><span>Kontrol nilai dan operasi</span></div>
+    <section class="grid-3">
+        <article class="panel"><h3>Financial Dashboard</h3><div class="mini-grid">{% set fm=[('Pendapatan',format_rupiah(d.financial.revenue)),('Margin',format_rupiah(d.financial.margin)),('Laba Bersih',format_rupiah(d.financial.net_profit)),('Piutang',format_rupiah(d.financial.receivable)),('Outstanding Invoice',d.financial.outstanding_invoice),('Nilai PO',format_rupiah(d.financial.purchase_order_value)),('Nilai Pembelian',format_rupiah(d.financial.purchase_value))] %}{% for label,value in fm %}<div class="mini"><small>{{ label }}</small><strong>{{ value }}</strong></div>{% endfor %}</div></article>
+        <article class="panel"><h3>Purchase</h3><div class="mini-grid"><div class="mini"><small>PO Aktif</small><strong>{{ d.purchase.active }}</strong></div><div class="mini"><small>PO Outstanding</small><strong>{{ d.purchase.outstanding }}</strong></div><div class="mini"><small>PO Selesai</small><strong>{{ d.purchase.completed }}</strong></div><div class="mini"><small>Nilai PO</small><strong>{{ format_rupiah(d.purchase.value) }}</strong></div></div>{% for row in d.purchase.suppliers[:5] %}<div class="rank"><b>{{ loop.index }}</b><div><strong>{{ row.supplier }}</strong><small>{{ row.po_count }} PO · {{ format_rupiah(row.value) }}</small></div></div>{% else %}<p class="empty">Belum ada purchase.</p>{% endfor %}</article>
+        <article class="panel"><h3>Inventory</h3><div class="mini-grid"><div class="mini"><small>Stock Masuk</small><strong>{{ d.inventory.stock_in }}</strong></div><div class="mini"><small>Stock Keluar</small><strong>{{ d.inventory.stock_out }}</strong></div><div class="mini"><small>Available</small><strong>{{ d.inventory.available }}</strong></div><div class="mini"><small>Hampir Habis</small><strong>{{ d.inventory.low_stock }}</strong></div></div><h3>Fast Moving</h3>{% for row in d.inventory.fast_moving %}<div class="rank"><b>{{ loop.index }}</b><div><strong>{{ row.nama_produk }}</strong><small>{{ row.quantity }} unit keluar</small></div></div>{% else %}<p class="empty">Belum ada stock keluar.</p>{% endfor %}</article>
+    </section>
+
+    <div class="section-head"><h2>Owner Alert</h2><span class="alert-count">{{ d.alerts.total }} alert</span></div>
+    <section class="grid-3">
+        <article class="panel"><h3>Invoice Jatuh Tempo</h3>{% for row in d.alerts.overdue_invoice %}<div class="rank"><b>!</b><div><strong>{{ row.reference }} · {{ row.subject or '-' }}</strong><small>{{ row.due_date }} · {{ format_rupiah(row.amount) }}</small></div></div>{% else %}<p class="empty">Tidak ada invoice overdue.</p>{% endfor %}</article>
+        <article class="panel"><h3>Stock Hampir Habis</h3>{% for row in d.alerts.low_stock %}<div class="rank"><b>!</b><div><strong>{{ row.subject }}</strong><small>{{ row.reference or '-' }} · stock {{ row.stock }} / minimum {{ row.minimum_stock }}</small></div></div>{% else %}<p class="empty">Stock aman.</p>{% endfor %}</article>
+        <article class="panel"><h3>PO Terlambat & Quotation Expired</h3>{% for row in d.alerts.late_po %}<div class="rank"><b>PO</b><div><strong>{{ row.reference }} · {{ row.subject }}</strong><small>Estimasi {{ row.due_date }}</small></div></div>{% endfor %}{% for row in d.alerts.expired_quotation %}<div class="rank"><b>QT</b><div><strong>{{ row.reference }} · {{ row.subject }}</strong><small>Expired {{ row.due_date }}</small></div></div>{% endfor %}{% if not d.alerts.late_po and not d.alerts.expired_quotation %}<p class="empty">Tidak ada PO terlambat atau quotation expired.</p>{% endif %}</article>
+    </section>
+
+    <div class="section-head"><h2>Recent Activity</h2><span>Workflow Events · termasuk revision & cancellation</span></div>
+    <section class="panel"><ul class="activity">{% for row in d.recent_activity %}<li><span class="badge {% if 'CANCEL' in row.event_type %}danger{% endif %}">{{ row.document_type }} · {{ row.event_type }}</span><div><p><strong>{{ row.customer_name or 'Tanpa Customer' }}</strong> — {{ row.description }}</p><p>{{ row.old_status or '-' }} → {{ row.new_status or '-' }} · oleh {{ row.created_by or 'System' }}</p></div><time>{{ row.created_at }}</time></li>{% else %}<li class="empty">Belum ada workflow event pada periode ini.</li>{% endfor %}</ul></section>
+    <footer>Dashboard hanya membaca data ERP existing. Tidak membuat atau mengubah transaksi.</footer>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+const trend={{ d.trend|tojson }}, funnel={{ d.funnel|tojson }}, categories={{ d.product.categories|tojson }};
+const money=v=>new Intl.NumberFormat('id-ID',{notation:'compact',maximumFractionDigits:1}).format(v);
+const styles=getComputedStyle(document.documentElement), grid=styles.getPropertyValue('--line').trim(), text=styles.getPropertyValue('--muted').trim();
+Chart.defaults.color=text; Chart.defaults.borderColor=grid;
+new Chart(document.getElementById('trendChart'),{type:'line',data:{labels:trend.map(x=>x.label),datasets:[{label:'Omzet',data:trend.map(x=>x.revenue),borderColor:'#2684b8',backgroundColor:'rgba(38,132,184,.12)',fill:true,tension:.3},{label:'Margin',data:trend.map(x=>x.margin),borderColor:'#12a070',tension:.3},{label:'Laba Bersih',data:trend.map(x=>x.net_profit),borderColor:'#d17a16',tension:.3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{tooltip:{callbacks:{label:c=>c.dataset.label+': Rp '+money(c.raw)}}},scales:{y:{ticks:{callback:v=>'Rp '+money(v)}}}}});
+new Chart(document.getElementById('funnelChart'),{type:'bar',data:{labels:funnel.map(x=>x.stage),datasets:[{label:'Dokumen',data:funnel.map(x=>x.count),backgroundColor:'#256b9e',borderRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}}});
+new Chart(document.getElementById('categoryChart'),{type:'doughnut',data:{labels:categories.map(x=>x.category),datasets:[{data:categories.map(x=>x.revenue),backgroundColor:['#17466f','#2a83bb','#12a070','#e59b30','#9b6ac3','#d75b69','#5b8f65','#8b9bac']}]},options:{responsive:true,maintainAspectRatio:false,plugins:{tooltip:{callbacks:{label:c=>c.label+': Rp '+money(c.raw)}}}}});
+document.getElementById('period').addEventListener('change',event=>{const custom=event.target.value==='custom';document.getElementById('start_date').disabled=!custom;document.getElementById('end_date').disabled=!custom;});
+</script>
 </body>
 </html>
