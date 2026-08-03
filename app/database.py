@@ -73,6 +73,48 @@ def ensure_column(
         )
 
 
+def ensure_unique_partial_index(
+    conn,
+    *,
+    table_name,
+    column_names,
+    index_name,
+    where_clause,
+):
+    """Create a safe unique index without deleting legacy duplicates."""
+    grouped_columns = ", ".join(column_names)
+    duplicate = conn.execute(
+        f"""
+        SELECT {grouped_columns}, COUNT(*) AS duplicate_count
+        FROM {table_name}
+        WHERE {where_clause}
+        GROUP BY {grouped_columns}
+        HAVING COUNT(*) > 1
+        LIMIT 1
+        """
+    ).fetchone()
+
+    if duplicate is not None:
+        duplicate_values = ", ".join(
+            str(duplicate[column_name])
+            for column_name in column_names
+        )
+        raise RuntimeError(
+            "Migration workflow integrity diblokir: "
+            f"duplicate existing pada {table_name} "
+            f"({grouped_columns}) = ({duplicate_values}). "
+            "Audit dan perbaiki data pada salinan database sebelum migration."
+        )
+
+    conn.execute(
+        f"""
+        CREATE UNIQUE INDEX IF NOT EXISTS {index_name}
+        ON {table_name} ({grouped_columns})
+        WHERE {where_clause}
+        """
+    )
+
+
 def create_tables():
     conn = get_connection()
     cursor = conn.cursor()
@@ -908,6 +950,7 @@ def create_tables():
             nomor_surat_jalan TEXT NOT NULL UNIQUE,
             transaction_id INTEGER NOT NULL UNIQUE,
             invoice_id INTEGER,
+            warehouse_id INTEGER,
 
             tanggal TEXT NOT NULL,
             status TEXT NOT NULL DEFAULT 'Draft',
@@ -939,7 +982,11 @@ def create_tables():
 
             FOREIGN KEY (invoice_id)
                 REFERENCES sales_invoices (id)
-                ON DELETE SET NULL
+                ON DELETE SET NULL,
+
+            FOREIGN KEY (warehouse_id)
+                REFERENCES warehouses (id)
+                ON DELETE RESTRICT
         )
         """
     )
@@ -960,6 +1007,12 @@ def create_tables():
         conn,
         "delivery_orders",
         "invoice_id",
+        "INTEGER",
+    )
+    ensure_column(
+        conn,
+        "delivery_orders",
+        "warehouse_id",
         "INTEGER",
     )
     ensure_column(
@@ -1277,6 +1330,7 @@ def create_tables():
             catatan TEXT,
 
             status TEXT NOT NULL DEFAULT 'Diterbitkan',
+            idempotency_key TEXT,
 
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -1313,6 +1367,12 @@ def create_tables():
         "payment_receipts",
         "status",
         "TEXT NOT NULL DEFAULT 'Diterbitkan'",
+    )
+    ensure_column(
+        conn,
+        "payment_receipts",
+        "idempotency_key",
+        "TEXT",
     )
     ensure_column(conn, "payment_receipts", "created_at", "TIMESTAMP")
     ensure_column(conn, "payment_receipts", "updated_at", "TIMESTAMP")
@@ -1399,6 +1459,12 @@ def create_tables():
         "po_show_company_footer",
         "INTEGER NOT NULL DEFAULT 1",
     )
+    ensure_column(
+        conn,
+        "erp_settings",
+        "default_warehouse_id",
+        "INTEGER",
+    )
     ensure_column(conn, "erp_settings", "created_at", "TIMESTAMP")
     ensure_column(conn, "erp_settings", "updated_at", "TIMESTAMP")
     cursor.execute("INSERT OR IGNORE INTO erp_settings (id, inventory_enabled) VALUES (1, 0)")
@@ -1453,9 +1519,15 @@ def create_tables():
             saldo_setelah INTEGER NOT NULL DEFAULT 0,
             referensi TEXT,
             catatan TEXT,
+            source_type TEXT,
+            source_id INTEGER,
+            source_item_id INTEGER,
+            idempotency_key TEXT,
+            reversal_of_id INTEGER,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (warehouse_id) REFERENCES warehouses (id) ON DELETE CASCADE,
-            FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE CASCADE
+            FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE CASCADE,
+            FOREIGN KEY (reversal_of_id) REFERENCES stock_movements (id) ON DELETE RESTRICT
         )
     """)
     ensure_column(conn, "stock_movements", "tanggal", "TEXT")
@@ -1466,7 +1538,31 @@ def create_tables():
     ensure_column(conn, "stock_movements", "saldo_setelah", "INTEGER NOT NULL DEFAULT 0")
     ensure_column(conn, "stock_movements", "referensi", "TEXT")
     ensure_column(conn, "stock_movements", "catatan", "TEXT")
+    ensure_column(conn, "stock_movements", "source_type", "TEXT")
+    ensure_column(conn, "stock_movements", "source_id", "INTEGER")
+    ensure_column(conn, "stock_movements", "source_item_id", "INTEGER")
+    ensure_column(conn, "stock_movements", "idempotency_key", "TEXT")
+    ensure_column(conn, "stock_movements", "reversal_of_id", "INTEGER")
     ensure_column(conn, "stock_movements", "created_at", "TIMESTAMP")
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS workflow_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            document_type TEXT NOT NULL,
+            document_id INTEGER NOT NULL,
+            customer_id INTEGER,
+            event_type TEXT NOT NULL,
+            old_status TEXT,
+            new_status TEXT,
+            description TEXT NOT NULL,
+            idempotency_key TEXT,
+            created_by TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (customer_id) REFERENCES customers (id) ON DELETE SET NULL
+        )
+        """
+    )
 
 
     # ==========================================================
@@ -2098,6 +2194,7 @@ def create_tables():
             supplier_id INTEGER NOT NULL,
             invoice_id INTEGER,
             transaction_id INTEGER,
+            warehouse_id INTEGER,
             tanggal TEXT NOT NULL,
             estimasi_datang TEXT,
             status TEXT NOT NULL DEFAULT 'Draft',
@@ -2123,7 +2220,8 @@ def create_tables():
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (supplier_id) REFERENCES suppliers(id),
             FOREIGN KEY (invoice_id) REFERENCES sales_invoices(id),
-            FOREIGN KEY (transaction_id) REFERENCES sales_transactions(id)
+            FOREIGN KEY (transaction_id) REFERENCES sales_transactions(id),
+            FOREIGN KEY (warehouse_id) REFERENCES warehouses(id)
         )
         """
     )
@@ -2131,6 +2229,7 @@ def create_tables():
     purchase_order_columns = {
         "invoice_id": "INTEGER",
         "transaction_id": "INTEGER",
+        "warehouse_id": "INTEGER",
         "estimasi_datang": "TEXT",
         "status": "TEXT NOT NULL DEFAULT 'Draft'",
         "supplier_nama_snapshot": "TEXT",
@@ -2978,6 +3077,49 @@ def create_tables():
         WHERE status IS NULL
            OR TRIM(status) = ''
         """
+    )
+
+    ensure_unique_partial_index(
+        conn,
+        table_name="sales_transactions",
+        column_names=("source_quotation_id",),
+        index_name="uq_sales_transactions_source_quotation",
+        where_clause="source_quotation_id IS NOT NULL",
+    )
+    ensure_unique_partial_index(
+        conn,
+        table_name="purchase_orders",
+        column_names=("invoice_id",),
+        index_name="uq_purchase_orders_invoice",
+        where_clause="invoice_id IS NOT NULL",
+    )
+    ensure_unique_partial_index(
+        conn,
+        table_name="payment_receipts",
+        column_names=("idempotency_key",),
+        index_name="uq_payment_receipts_idempotency",
+        where_clause="idempotency_key IS NOT NULL",
+    )
+    ensure_unique_partial_index(
+        conn,
+        table_name="stock_movements",
+        column_names=("idempotency_key",),
+        index_name="uq_stock_movements_idempotency",
+        where_clause="idempotency_key IS NOT NULL",
+    )
+    ensure_unique_partial_index(
+        conn,
+        table_name="stock_movements",
+        column_names=("reversal_of_id",),
+        index_name="uq_stock_movements_reversal",
+        where_clause="reversal_of_id IS NOT NULL",
+    )
+    ensure_unique_partial_index(
+        conn,
+        table_name="workflow_events",
+        column_names=("idempotency_key",),
+        index_name="uq_workflow_events_idempotency",
+        where_clause="idempotency_key IS NOT NULL",
     )
 
     conn.commit()
