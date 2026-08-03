@@ -39,6 +39,17 @@ from quotation_master import (
     search_customers,
     search_products,
 )
+from workflow_integrity import (
+    WorkflowIntegrityError,
+    normalize_idempotency_key,
+    post_opening_stock,
+    post_stock_for_document,
+    reconcile_invoice_payment,
+    record_workflow_event,
+    reverse_stock_for_document,
+    sync_transaction_status,
+    validate_transition,
+)
 
 try:
     import qrcode
@@ -2710,6 +2721,59 @@ def edit_transaction(transaction_id):
         conn.close()
         return "Transaksi tidak ditemukan.", 404
 
+    if request.method == "POST" and transaction["status"] == "Batal":
+        record_workflow_event(
+            conn,
+            document_type="TRANSACTION",
+            document_id=transaction_id,
+            customer_id=transaction["customer_id"],
+            event_type="action_blocked",
+            description="Edit finansial ditolak karena Transaction Batal.",
+            created_by=transaction["referal"] or "Sistem",
+        )
+        conn.commit()
+        conn.close()
+        return "Transaction Batal tidak dapat diedit finansial.", 400
+
+    if request.method == "POST":
+        downstream = conn.execute(
+            """
+            SELECT
+                EXISTS(
+                    SELECT 1 FROM sales_invoices
+                    WHERE transaction_id = ?
+                ) AS has_invoice,
+                EXISTS(
+                    SELECT 1 FROM delivery_orders
+                    WHERE transaction_id = ?
+                ) AS has_delivery_order,
+                EXISTS(
+                    SELECT 1 FROM payment_receipts
+                    WHERE transaction_id = ?
+                ) AS has_receipt
+            """,
+            (transaction_id, transaction_id, transaction_id),
+        ).fetchone()
+        if any(int(downstream[key] or 0) for key in downstream.keys()):
+            record_workflow_event(
+                conn,
+                document_type="TRANSACTION",
+                document_id=transaction_id,
+                customer_id=transaction["customer_id"],
+                event_type="action_blocked",
+                description=(
+                    "Edit finansial transaksi ditolak karena dokumen "
+                    "downstream sudah tersedia."
+                ),
+            )
+            conn.commit()
+            conn.close()
+            return (
+                "Transaksi yang sudah mempunyai Invoice, Delivery Order, "
+                "atau Receipt tidak dapat diedit finansial. Gunakan workflow revisi.",
+                400,
+            )
+
     customers_list = conn.execute(
         """
         SELECT id, nama, instansi
@@ -2991,7 +3055,7 @@ def update_transaction_status(transaction_id):
 
     transaction = conn.execute(
         """
-        SELECT id
+        SELECT *
         FROM sales_transactions
         WHERE id = ?
         """,
@@ -3002,15 +3066,77 @@ def update_transaction_status(transaction_id):
         conn.close()
         return "Transaksi tidak ditemukan.", 404
 
+    if status in ("Invoice", "Terkirim", "Lunas", "Selesai"):
+        record_workflow_event(
+            conn,
+            document_type="TRANSACTION",
+            document_id=transaction_id,
+            customer_id=transaction["customer_id"],
+            event_type="action_blocked",
+            description=f"Perubahan manual ke status turunan {status} ditolak.",
+        )
+        conn.commit()
+        conn.close()
+        return "Status transaksi tersebut hanya dapat diubah oleh workflow.", 400
+
+    if status == "Batal":
+        active_downstream = conn.execute(
+            """
+            SELECT
+                EXISTS(
+                    SELECT 1 FROM sales_invoices
+                    WHERE transaction_id = ?
+                      AND status_pembayaran != 'Batal'
+                ) AS active_invoice,
+                EXISTS(
+                    SELECT 1 FROM delivery_orders
+                    WHERE transaction_id = ? AND status != 'Batal'
+                ) AS active_delivery,
+                EXISTS(
+                    SELECT 1 FROM purchase_orders
+                    WHERE transaction_id = ? AND status != 'Batal'
+                ) AS active_purchase
+            """,
+            (transaction_id, transaction_id, transaction_id),
+        ).fetchone()
+        if any(int(active_downstream[key] or 0) for key in active_downstream.keys()):
+            conn.close()
+            return "Batalkan dokumen downstream aktif terlebih dahulu.", 400
+
+    if status in ("Draft", "Closing"):
+        downstream_count = conn.execute(
+            """
+            SELECT
+                (SELECT COUNT(*) FROM sales_invoices WHERE transaction_id = ?)
+              + (SELECT COUNT(*) FROM delivery_orders WHERE transaction_id = ?)
+              + (SELECT COUNT(*) FROM payment_receipts WHERE transaction_id = ?)
+            """,
+            (transaction_id, transaction_id, transaction_id),
+        ).fetchone()[0]
+        if downstream_count:
+            conn.close()
+            return "Status transaksi dengan downstream tidak dapat diputar balik.", 400
+
+    old_status = transaction["status"]
     conn.execute(
         """
         UPDATE sales_transactions
-        SET status = ?,
-            updated_at = CURRENT_TIMESTAMP
+        SET status = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
         """,
         (status, transaction_id),
     )
+    if old_status != status:
+        record_workflow_event(
+            conn,
+            document_type="TRANSACTION",
+            document_id=transaction_id,
+            customer_id=transaction["customer_id"],
+            event_type="status_changed",
+            old_status=old_status,
+            new_status=status,
+            description="Status transaksi diubah melalui workflow manual terbatas.",
+        )
 
     conn.commit()
     conn.close()
@@ -3136,6 +3262,19 @@ def generate_invoice(transaction_id):
         conn.close()
         return "Transaksi tidak ditemukan.", 404
 
+    if transaction["status"] == "Batal":
+        record_workflow_event(
+            conn,
+            document_type="TRANSACTION",
+            document_id=transaction_id,
+            customer_id=transaction["customer_id"],
+            event_type="action_blocked",
+            description="Pembuatan Invoice ditolak karena transaksi Batal.",
+        )
+        conn.commit()
+        conn.close()
+        return "Transaksi Batal tidak dapat membuat Invoice.", 400
+
     existing_invoice = conn.execute(
         """
         SELECT id
@@ -3183,15 +3322,10 @@ def generate_invoice(transaction_id):
             ),
         )
 
-        conn.execute(
-            """
-            UPDATE sales_transactions
-            SET status = 'Invoice',
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-              AND status NOT IN ('Lunas', 'Selesai', 'Batal')
-            """,
-            (transaction_id,),
+        sync_transaction_status(
+            conn,
+            transaction_id,
+            reason="Invoice dibuat dan transaksi disinkronkan.",
         )
 
         conn.commit()
@@ -3224,11 +3358,18 @@ def update_invoice_status(transaction_id):
     if status_pembayaran not in INVOICE_PAYMENT_STATUSES:
         return "Status pembayaran invoice tidak valid.", 400
 
+    if status_pembayaran != "Batal":
+        return (
+            "Status pembayaran dihitung otomatis dari Receipt non-Void. "
+            "User tidak dapat mengubahnya secara manual.",
+            400,
+        )
+
     conn = get_connection()
 
     invoice = conn.execute(
         """
-        SELECT id
+        SELECT *
         FROM sales_invoices
         WHERE transaction_id = ?
         """,
@@ -3239,38 +3380,40 @@ def update_invoice_status(transaction_id):
         conn.close()
         return "Invoice belum dibuat.", 404
 
+    active_receipts = conn.execute(
+        """
+        SELECT COUNT(*) FROM payment_receipts
+        WHERE invoice_id = ? AND status != 'Void'
+        """,
+        (invoice["id"],),
+    ).fetchone()[0]
+    if active_receipts:
+        conn.close()
+        return "Void seluruh Receipt aktif sebelum membatalkan Invoice.", 400
+
+    old_status = invoice["status_pembayaran"]
     conn.execute(
         """
         UPDATE sales_invoices
-        SET status_pembayaran = ?,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE transaction_id = ?
+        SET status_pembayaran = 'Batal', updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
         """,
-        (status_pembayaran, transaction_id),
+        (invoice["id"],),
     )
-
-    if status_pembayaran == "Lunas":
-        conn.execute(
-            """
-            UPDATE sales_transactions
-            SET status = 'Lunas',
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-            """,
-            (transaction_id,),
-        )
-
-    elif status_pembayaran == "Belum Lunas":
-        conn.execute(
-            """
-            UPDATE sales_transactions
-            SET status = 'Invoice',
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-              AND status NOT IN ('Terkirim', 'Selesai', 'Batal')
-            """,
-            (transaction_id,),
-        )
+    record_workflow_event(
+        conn,
+        document_type="INVOICE",
+        document_id=invoice["id"],
+        event_type="cancelled",
+        old_status=old_status,
+        new_status="Batal",
+        description="Invoice dibatalkan melalui workflow terpisah.",
+    )
+    sync_transaction_status(
+        conn,
+        transaction_id,
+        reason="Transaction disinkronkan setelah Invoice dibatalkan.",
+    )
 
     conn.commit()
     conn.close()
@@ -3337,30 +3480,7 @@ def edit_invoice(transaction_id):
     if request.method == "POST":
         tanggal_invoice = request.form.get("tanggal_invoice", "").strip()
         jatuh_tempo = request.form.get("jatuh_tempo", "").strip()
-        jumlah_dibayar = max(parse_integer(request.form.get("jumlah_dibayar")), 0)
-        dp_persen_raw = request.form.get("dp_persen", "0").strip()
         catatan = request.form.get("catatan", "").strip()
-
-        try:
-            dp_persen = float(dp_persen_raw or 0)
-        except ValueError:
-            dp_persen = 0
-
-        dp_persen = max(0, min(dp_persen, 100))
-
-        # Jika nominal DP kosong tetapi persentase diisi, hitung otomatis.
-        if jumlah_dibayar == 0 and dp_persen > 0:
-            jumlah_dibayar = round(total_tagihan * dp_persen / 100)
-
-        # Jika nominal diisi, persentase diselaraskan.
-        if total_tagihan > 0 and jumlah_dibayar > 0:
-            dp_persen = round((jumlah_dibayar / total_tagihan) * 100, 2)
-
-        status_pembayaran = invoice_payment_status(
-            total_tagihan,
-            jumlah_dibayar,
-            invoice["status_pembayaran"],
-        )
 
         if not tanggal_invoice:
             conn.close()
@@ -3371,9 +3491,6 @@ def edit_invoice(transaction_id):
             UPDATE sales_invoices
             SET tanggal_invoice = ?,
                 jatuh_tempo = ?,
-                jumlah_dibayar = ?,
-                dp_persen = ?,
-                status_pembayaran = ?,
                 catatan = ?,
                 updated_at = CURRENT_TIMESTAMP
             WHERE transaction_id = ?
@@ -3381,35 +3498,11 @@ def edit_invoice(transaction_id):
             (
                 tanggal_invoice,
                 jatuh_tempo or None,
-                jumlah_dibayar,
-                dp_persen,
-                status_pembayaran,
                 catatan or None,
                 transaction_id,
             ),
         )
-
-        if status_pembayaran == "Lunas":
-            conn.execute(
-                """
-                UPDATE sales_transactions
-                SET status = 'Lunas',
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
-                """,
-                (transaction_id,),
-            )
-        elif status_pembayaran in ("Belum Lunas", "DP"):
-            conn.execute(
-                """
-                UPDATE sales_transactions
-                SET status = 'Invoice',
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
-                  AND status NOT IN ('Terkirim', 'Selesai', 'Batal')
-                """,
-                (transaction_id,),
-            )
+        reconcile_invoice_payment(conn, invoice["id"])
 
         conn.commit()
         conn.close()
@@ -4276,6 +4369,22 @@ def edit_quotation(quotation_id):
     if quotation is None:
         conn.close()
         return "Penawaran tidak ditemukan.", 404
+
+    if request.method == "POST" and quotation["converted_transaction_id"]:
+        add_quotation_activity(
+            conn,
+            quotation_id,
+            "blocked",
+            "Edit finansial ditolak karena penawaran sudah dikonversi.",
+            quotation["sales"] or "Sistem",
+        )
+        conn.commit()
+        conn.close()
+        return (
+            "Identity quotation yang sudah dikonversi tidak dapat diubah. "
+            "Item, harga, dan customer juga dikunci; gunakan workflow revisi.",
+            400,
+        )
 
     identities_list = get_active_quotation_identities(conn)
     current_identity = get_effective_identity(
@@ -5169,6 +5278,21 @@ def convert_quotation_to_transaction(quotation_id):
         conn.close()
         return "Penawaran tidak ditemukan.", 404
 
+    if quotation["status"] in ("Batal", "Expired"):
+        add_quotation_activity(
+            conn,
+            quotation_id,
+            "blocked",
+            f"Konversi ditolak karena status penawaran {quotation['status']}.",
+            quotation["sales"] or "Sistem",
+        )
+        conn.commit()
+        conn.close()
+        return (
+            f"Quotation {quotation['status']} tidak dapat dikonversi menjadi Transaction.",
+            400,
+        )
+
     identity = get_effective_identity(
         DOCUMENT_TYPE_QUOTATION,
         quotation_id,
@@ -5176,6 +5300,14 @@ def convert_quotation_to_transaction(quotation_id):
     )
 
     if not identity_allows_transaction_conversion(identity):
+        add_quotation_activity(
+            conn,
+            quotation_id,
+            "blocked",
+            "Konversi ditolak karena identity tidak mengizinkan Transaction.",
+            quotation["sales"] or "Sistem",
+        )
+        conn.commit()
         conn.close()
         return (
             "Quotation Denko tidak dapat dikonversi menjadi Transaction. "
@@ -5540,6 +5672,19 @@ def generate_delivery_order(transaction_id):
         conn.close()
         return "Transaksi tidak ditemukan.", 404
 
+    if transaction["status"] == "Batal":
+        record_workflow_event(
+            conn,
+            document_type="TRANSACTION",
+            document_id=transaction_id,
+            customer_id=transaction["customer_id"],
+            event_type="action_blocked",
+            description="Pembuatan Delivery Order ditolak karena transaksi Batal.",
+        )
+        conn.commit()
+        conn.close()
+        return "Transaksi Batal tidak dapat membuat Delivery Order.", 400
+
     existing = conn.execute(
         """
         SELECT id
@@ -5811,6 +5956,19 @@ def edit_delivery_order(delivery_order_id):
         conn.close()
         return "Surat jalan tidak ditemukan.", 404
 
+    if request.method == "POST" and delivery_order["status"] != "Draft":
+        record_workflow_event(
+            conn,
+            document_type="DELIVERY_ORDER",
+            document_id=delivery_order_id,
+            event_type="action_blocked",
+            description="Edit item Delivery Order non-Draft ditolak.",
+            created_by=delivery_order["sales"] or "Sistem",
+        )
+        conn.commit()
+        conn.close()
+        return "Delivery Order non-Draft tidak dapat diedit itemnya.", 400
+
     items = conn.execute(
         """
         SELECT *
@@ -5999,8 +6157,9 @@ def update_delivery_order_status(delivery_order_id):
     delivery_order = conn.execute(
         """
         SELECT
-            delivery_orders.id,
+            delivery_orders.*,
             delivery_orders.transaction_id,
+            sales_transactions.customer_id,
             sales_transactions.referal AS sales
         FROM delivery_orders
         INNER JOIN sales_transactions
@@ -6015,52 +6174,75 @@ def update_delivery_order_status(delivery_order_id):
         conn.close()
         return "Surat jalan tidak ditemukan.", 404
 
-    conn.execute(
-        """
-        UPDATE delivery_orders
-        SET status = ?,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-        """,
-        (status, delivery_order_id),
-    )
+    try:
+        should_change = validate_transition(
+            "DELIVERY_ORDER",
+            delivery_order["status"],
+            status,
+        )
+        if not should_change:
+            conn.close()
+            return redirect(
+                url_for(
+                    "delivery_order_detail",
+                    delivery_order_id=delivery_order_id,
+                )
+            )
 
-    if status in ("Dalam Pengiriman", "Terkirim"):
+        if status == "Terkirim":
+            post_stock_for_document(
+                conn,
+                "DELIVERY_ORDER",
+                delivery_order_id,
+                actor=delivery_order["sales"] or "Sistem",
+            )
+        elif status == "Batal":
+            reverse_stock_for_document(
+                conn,
+                "DELIVERY_ORDER",
+                delivery_order_id,
+                actor=delivery_order["sales"] or "Sistem",
+            )
+
         conn.execute(
             """
-            UPDATE sales_transactions
-            SET status = 'Terkirim',
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-              AND status NOT IN ('Lunas', 'Selesai', 'Batal')
-            """,
-            (delivery_order["transaction_id"],),
-        )
-
-    if status == "Diterima":
-        conn.execute(
-            """
-            UPDATE sales_transactions
-            SET status = CASE
-                    WHEN status = 'Lunas' THEN 'Selesai'
-                    ELSE status
-                END,
-                updated_at = CURRENT_TIMESTAMP
+            UPDATE delivery_orders
+            SET status = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
             """,
-            (delivery_order["transaction_id"],),
+            (status, delivery_order_id),
         )
+        add_delivery_order_activity(
+            conn,
+            delivery_order_id,
+            "status",
+            f"Status surat jalan diubah menjadi {status}.",
+            delivery_order["sales"] or "Sistem",
+        )
+        record_workflow_event(
+            conn,
+            document_type="DELIVERY_ORDER",
+            document_id=delivery_order_id,
+            customer_id=delivery_order["customer_id"],
+            event_type="status_changed",
+            old_status=delivery_order["status"],
+            new_status=status,
+            description=f"Status Delivery Order diubah menjadi {status}.",
+            created_by=delivery_order["sales"] or "Sistem",
+        )
+        sync_transaction_status(
+            conn,
+            delivery_order["transaction_id"],
+            reason="Transaction disinkronkan dari status Delivery Order.",
+            actor=delivery_order["sales"] or "Sistem",
+        )
+        conn.commit()
+        conn.close()
 
-    add_delivery_order_activity(
-        conn,
-        delivery_order_id,
-        "status",
-        f"Status surat jalan diubah menjadi {status}.",
-        delivery_order["sales"] or "Sistem",
-    )
-
-    conn.commit()
-    conn.close()
+    except (WorkflowIntegrityError, sqlite3.Error) as error:
+        conn.rollback()
+        conn.close()
+        return f"Gagal memperbarui status surat jalan: {error}", 400
 
     return redirect(
         url_for(
@@ -6182,6 +6364,17 @@ def delete_delivery_order(delivery_order_id):
             400,
         )
 
+    movement_count = conn.execute(
+        """
+        SELECT COUNT(*) FROM stock_movements
+        WHERE source_type = 'DELIVERY_ORDER' AND source_id = ?
+        """,
+        (delivery_order_id,),
+    ).fetchone()[0]
+    if movement_count:
+        conn.close()
+        return "Surat jalan dengan stock movement tidak dapat dihapus.", 400
+
     conn.execute(
         """
         DELETE FROM delivery_orders
@@ -6230,102 +6423,10 @@ def add_receipt_activity(
 
 
 def calculate_invoice_payment_summary(conn, invoice_id):
-    invoice = conn.execute(
-        """
-        SELECT
-            sales_invoices.*,
-            sales_transactions.total_penjualan,
-            sales_transactions.potongan
-        FROM sales_invoices
-        INNER JOIN sales_transactions
-            ON sales_invoices.transaction_id =
-               sales_transactions.id
-        WHERE sales_invoices.id = ?
-        """,
-        (invoice_id,),
-    ).fetchone()
-
-    if invoice is None:
+    try:
+        return reconcile_invoice_payment(conn, invoice_id)
+    except WorkflowIntegrityError:
         return None
-
-    total_tagihan = max(
-        int(invoice["total_penjualan"] or 0)
-        - int(invoice["potongan"] or 0),
-        0,
-    )
-
-    total_dibayar = conn.execute(
-        """
-        SELECT COALESCE(SUM(nominal), 0)
-        FROM payment_receipts
-        WHERE invoice_id = ?
-          AND status != 'Void'
-        """,
-        (invoice_id,),
-    ).fetchone()[0]
-
-    total_dibayar = int(total_dibayar or 0)
-    sisa_tagihan = max(total_tagihan - total_dibayar, 0)
-
-    if total_tagihan > 0 and total_dibayar >= total_tagihan:
-        status_pembayaran = "Lunas"
-    elif total_dibayar > 0:
-        status_pembayaran = "DP"
-    else:
-        status_pembayaran = "Belum Lunas"
-
-    conn.execute(
-        """
-        UPDATE sales_invoices
-        SET jumlah_dibayar = ?,
-            dp_persen = CASE
-                WHEN ? > 0
-                THEN ROUND((? * 100.0) / ?, 2)
-                ELSE 0
-            END,
-            status_pembayaran = ?,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-        """,
-        (
-            total_dibayar,
-            total_tagihan,
-            total_dibayar,
-            total_tagihan,
-            status_pembayaran,
-            invoice_id,
-        ),
-    )
-
-    if status_pembayaran == "Lunas":
-        conn.execute(
-            """
-            UPDATE sales_transactions
-            SET status = 'Lunas',
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-            """,
-            (invoice["transaction_id"],),
-        )
-    elif status_pembayaran == "DP":
-        conn.execute(
-            """
-            UPDATE sales_transactions
-            SET status = 'Invoice',
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-              AND status NOT IN ('Terkirim', 'Selesai', 'Batal')
-            """,
-            (invoice["transaction_id"],),
-        )
-
-    return {
-        "invoice": invoice,
-        "total_tagihan": total_tagihan,
-        "total_dibayar": total_dibayar,
-        "sisa_tagihan": sisa_tagihan,
-        "status_pembayaran": status_pembayaran,
-    }
 
 
 @app.route("/receipts")
@@ -6426,6 +6527,19 @@ def add_receipt(invoice_id):
         conn.close()
         return "Invoice tidak ditemukan.", 404
 
+    if invoice["status_pembayaran"] == "Batal":
+        record_workflow_event(
+            conn,
+            document_type="INVOICE",
+            document_id=invoice_id,
+            event_type="action_blocked",
+            description="Pembuatan Receipt ditolak karena Invoice Batal.",
+            created_by=invoice["sales"] or "Sistem",
+        )
+        conn.commit()
+        conn.close()
+        return "Invoice Batal tidak dapat menerima Receipt.", 400
+
     summary = calculate_invoice_payment_summary(conn, invoice_id)
 
     if request.method == "POST":
@@ -6468,17 +6582,50 @@ def add_receipt(invoice_id):
             conn.close()
             return "Nominal pembayaran harus lebih dari 0.", 400
 
+        if not untuk_pembayaran:
+            untuk_pembayaran = (
+                f"{jenis_pembayaran} Invoice "
+                f"{invoice['nomor_invoice']}"
+            )
+
+        try:
+            idempotency_key = normalize_idempotency_key(
+                request.form.get("idempotency_key"),
+                "RECEIPT",
+                invoice_id,
+                tanggal,
+                jenis_pembayaran,
+                metode_pembayaran,
+                bank,
+                nomor_referensi,
+                nominal,
+                untuk_pembayaran,
+            )
+        except WorkflowIntegrityError as error:
+            conn.close()
+            return str(error), 400
+
+        existing_receipt = conn.execute(
+            """
+            SELECT id FROM payment_receipts
+            WHERE idempotency_key = ?
+            """,
+            (idempotency_key,),
+        ).fetchone()
+        if existing_receipt:
+            conn.close()
+            return redirect(
+                url_for(
+                    "receipt_detail",
+                    receipt_id=existing_receipt["id"],
+                )
+            )
+
         if nominal > summary["sisa_tagihan"]:
             conn.close()
             return (
                 "Nominal pembayaran melebihi sisa tagihan.",
                 400,
-            )
-
-        if not untuk_pembayaran:
-            untuk_pembayaran = (
-                f"{jenis_pembayaran} Invoice "
-                f"{invoice['nomor_invoice']}"
             )
 
         try:
@@ -6504,9 +6651,10 @@ def add_receipt(invoice_id):
                     nominal,
                     untuk_pembayaran,
                     catatan,
-                    status
+                    status,
+                    idempotency_key
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     nomor_kwitansi,
@@ -6521,6 +6669,7 @@ def add_receipt(invoice_id):
                     untuk_pembayaran,
                     catatan or None,
                     "Diterbitkan",
+                    idempotency_key,
                 ),
             )
 
@@ -6536,6 +6685,17 @@ def add_receipt(invoice_id):
                     f"Rp {nominal:,.0f}."
                 ).replace(",", "."),
                 invoice["sales"] or "Sistem",
+            )
+            record_workflow_event(
+                conn,
+                document_type="RECEIPT",
+                document_id=receipt_id,
+                event_type="payment_created",
+                description=(
+                    f"Payment Rp {nominal:,.0f} dicatat."
+                ).replace(",", "."),
+                idempotency_key=f"EVENT:{idempotency_key}",
+                created_by=invoice["sales"] or "Sistem",
             )
 
             calculate_invoice_payment_summary(
@@ -6553,7 +6713,7 @@ def add_receipt(invoice_id):
                 )
             )
 
-        except sqlite3.Error as error:
+        except (WorkflowIntegrityError, sqlite3.Error) as error:
             conn.rollback()
             conn.close()
             return f"Gagal membuat kwitansi: {error}", 400
@@ -6672,6 +6832,16 @@ def update_receipt_status(receipt_id):
         conn.close()
         return "Kwitansi tidak ditemukan.", 404
 
+    if receipt["status"] == status:
+        conn.close()
+        return redirect(
+            url_for("receipt_detail", receipt_id=receipt_id)
+        )
+
+    if receipt["status"] == "Void" or status != "Void":
+        conn.close()
+        return "Receipt Void bersifat final dan tidak dapat diaktifkan kembali.", 400
+
     conn.execute(
         """
         UPDATE payment_receipts
@@ -6688,6 +6858,17 @@ def update_receipt_status(receipt_id):
         "status",
         f"Status kwitansi diubah menjadi {status}.",
         receipt["sales"] or "Sistem",
+    )
+    record_workflow_event(
+        conn,
+        document_type="RECEIPT",
+        document_id=receipt_id,
+        event_type="payment_voided",
+        old_status=receipt["status"],
+        new_status="Void",
+        description="Payment di-Void dan invoice dihitung ulang.",
+        idempotency_key=f"EVENT:RECEIPT:{receipt_id}:VOID",
+        created_by=receipt["sales"] or "Sistem",
     )
 
     calculate_invoice_payment_summary(
@@ -6805,32 +6986,11 @@ def delete_receipt(receipt_id):
         conn.close()
         return "Kwitansi tidak ditemukan.", 404
 
-    if receipt["status"] != "Void":
-        conn.close()
-        return (
-            "Kwitansi hanya dapat dihapus setelah berstatus Void.",
-            400,
-        )
-
-    invoice_id = receipt["invoice_id"]
-
-    conn.execute(
-        """
-        DELETE FROM payment_receipts
-        WHERE id = ?
-        """,
-        (receipt_id,),
-    )
-
-    calculate_invoice_payment_summary(
-        conn,
-        invoice_id,
-    )
-
-    conn.commit()
     conn.close()
-
-    return redirect(url_for("receipts"))
+    return (
+        "Receipt tidak dapat dihapus. Gunakan Void agar audit pembayaran tetap utuh.",
+        400,
+    )
 
 
 
@@ -6849,12 +7009,40 @@ def inventory_settings():
     conn = get_connection()
     if request.method == "POST":
         enabled = 1 if request.form.get("inventory_enabled") == "1" else 0
-        conn.execute("UPDATE erp_settings SET inventory_enabled = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1", (enabled,))
+        default_warehouse_id = parse_integer(
+            request.form.get("default_warehouse_id"),
+            0,
+        )
+        if default_warehouse_id:
+            warehouse = conn.execute(
+                "SELECT id FROM warehouses WHERE id = ? AND aktif = 1",
+                (default_warehouse_id,),
+            ).fetchone()
+            if warehouse is None:
+                conn.close()
+                return "Default warehouse tidak valid.", 400
+        conn.execute(
+            """
+            UPDATE erp_settings
+            SET inventory_enabled = ?,
+                default_warehouse_id = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = 1
+            """,
+            (enabled, default_warehouse_id or None),
+        )
         conn.commit(); conn.close()
         return redirect(url_for("inventory_settings"))
     settings = conn.execute("SELECT * FROM erp_settings WHERE id = 1").fetchone()
+    warehouse_rows = conn.execute(
+        "SELECT id, kode_gudang, nama_gudang FROM warehouses WHERE aktif = 1 ORDER BY nama_gudang"
+    ).fetchall()
     conn.close()
-    return render_template("inventory_settings.html", settings=settings)
+    return render_template(
+        "inventory_settings.html",
+        settings=settings,
+        warehouses=warehouse_rows,
+    )
 
 @app.route("/warehouses")
 def warehouses():
@@ -6944,15 +7132,22 @@ def setup_stock():
             conn.close(); return "Gudang, produk, dan tanggal wajib diisi.", 400
         if stok_awal < 0 or minimum < 0:
             conn.close(); return "Stok tidak boleh negatif.", 400
-        existing = conn.execute("SELECT * FROM product_stock WHERE warehouse_id=? AND product_id=?", (warehouse_id,product_id)).fetchone()
-        if existing:
-            saldo = int(existing["stok"] or 0) + stok_awal
-            conn.execute("UPDATE product_stock SET stok=?, minimum_stok=?, updated_at=CURRENT_TIMESTAMP WHERE id=?", (saldo,minimum,existing["id"]))
-        else:
-            saldo = stok_awal
-            conn.execute("INSERT INTO product_stock (product_id,warehouse_id,stok,minimum_stok) VALUES (?,?,?,?)", (product_id,warehouse_id,stok_awal,minimum))
-        conn.execute("INSERT INTO stock_movements (tanggal,warehouse_id,product_id,movement_type,qty,saldo_setelah,referensi,catatan) VALUES (?,?,?,?,?,?,?,?)", (tanggal,warehouse_id,product_id,"OPENING",stok_awal,saldo,"STOK AWAL",catatan or None))
-        conn.commit(); conn.close(); return redirect(url_for("stocks"))
+        try:
+            post_opening_stock(
+                conn,
+                warehouse_id=warehouse_id,
+                product_id=product_id,
+                quantity=stok_awal,
+                minimum_stock=minimum,
+                tanggal=tanggal,
+                catatan=catatan,
+                idempotency_key=request.form.get("idempotency_key"),
+            )
+            conn.commit(); conn.close(); return redirect(url_for("stocks"))
+        except (WorkflowIntegrityError, sqlite3.Error) as error:
+            conn.rollback()
+            conn.close()
+            return f"Gagal mencatat opening stock: {error}", 400
     conn.close(); return render_template("stock_setup.html", warehouses=warehouses_list, products=products_list)
 
 @app.route("/stocks/<int:warehouse_id>/<int:product_id>/movements")
@@ -7010,6 +7205,20 @@ def generate_purchase_order_from_invoice(transaction_id):
         conn.close()
         return "Transaksi tidak ditemukan.", 404
 
+    if transaction["status"] == "Batal":
+        record_workflow_event(
+            conn,
+            document_type="TRANSACTION",
+            document_id=transaction_id,
+            customer_id=transaction["customer_id"],
+            event_type="action_blocked",
+            description="Pembuatan Purchase Order ditolak karena Transaction Batal.",
+            created_by=transaction["referal"] or "Sistem",
+        )
+        conn.commit()
+        conn.close()
+        return "Transaction Batal tidak dapat membuat Purchase Order.", 400
+
     invoice = conn.execute(
         """
         SELECT *
@@ -7025,6 +7234,20 @@ def generate_purchase_order_from_invoice(transaction_id):
             "Invoice belum dibuat. Buat invoice terlebih dahulu.",
             400,
         )
+
+    if invoice["status_pembayaran"] == "Batal":
+        record_workflow_event(
+            conn,
+            document_type="INVOICE",
+            document_id=invoice["id"],
+            customer_id=transaction["customer_id"],
+            event_type="action_blocked",
+            description="Pembuatan Purchase Order ditolak karena Invoice Batal.",
+            created_by=transaction["referal"] or "Sistem",
+        )
+        conn.commit()
+        conn.close()
+        return "Invoice Batal tidak dapat membuat Purchase Order.", 400
 
     existing_po = conn.execute(
         """
@@ -7535,6 +7758,9 @@ def add_purchase_order():
                 request.form,
                 subtotal,
             )
+            # Status awal selalu Draft; transition stock wajib melalui
+            # endpoint status agar posting dan rollback tidak dapat dilewati.
+            header["status"] = "Draft"
 
             supplier = conn.execute(
                 """
@@ -7751,6 +7977,18 @@ def edit_purchase_order(purchase_order_id):
         conn.close()
         return "Purchase Order tidak ditemukan.", 404
 
+    if request.method == "POST" and purchase_order["status"] != "Draft":
+        record_workflow_event(
+            conn,
+            document_type="PURCHASE_ORDER",
+            document_id=purchase_order_id,
+            event_type="action_blocked",
+            description="Edit finansial PO non-Draft ditolak.",
+        )
+        conn.commit()
+        conn.close()
+        return "Purchase Order non-Draft tidak dapat diedit finansial.", 400
+
     supplier_rows = conn.execute(
         """
         SELECT *
@@ -7778,6 +8016,9 @@ def edit_purchase_order(purchase_order_id):
                 request.form,
                 subtotal,
             )
+            # Edit finansial Draft tidak boleh sekaligus menjalankan
+            # transition workflow/stock posting.
+            header["status"] = purchase_order["status"]
 
             supplier = conn.execute(
                 """
@@ -7975,33 +8216,67 @@ def update_purchase_order_status(purchase_order_id):
         conn.close()
         return "Purchase Order tidak ditemukan.", 404
 
-    sent_at = purchase_order["dikirim_pada"]
-    completed_at = purchase_order["selesai_pada"]
-
-    if status != "Draft" and sent_at is None:
-        sent_at = datetime.now()
-
-    if status == "Selesai" and completed_at is None:
-        completed_at = datetime.now()
-
-    conn.execute(
-        """
-        UPDATE purchase_orders
-        SET status = ?,
-            dikirim_pada = ?,
-            selesai_pada = ?,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-        """,
-        (
+    try:
+        should_change = validate_transition(
+            "PURCHASE_ORDER",
+            purchase_order["status"],
             status,
-            sent_at,
-            completed_at,
-            purchase_order_id,
-        ),
-    )
-    conn.commit()
-    conn.close()
+        )
+        if not should_change:
+            conn.close()
+            return redirect(
+                url_for(
+                    "purchase_order_detail",
+                    purchase_order_id=purchase_order_id,
+                )
+            )
+
+        if status == "Barang Diterima":
+            post_stock_for_document(
+                conn,
+                "PURCHASE_ORDER",
+                purchase_order_id,
+            )
+        elif status == "Batal":
+            reverse_stock_for_document(
+                conn,
+                "PURCHASE_ORDER",
+                purchase_order_id,
+            )
+
+        sent_at = purchase_order["dikirim_pada"]
+        completed_at = purchase_order["selesai_pada"]
+        if status != "Draft" and sent_at is None:
+            sent_at = datetime.now()
+        if status == "Selesai" and completed_at is None:
+            completed_at = datetime.now()
+
+        conn.execute(
+            """
+            UPDATE purchase_orders
+            SET status = ?,
+                dikirim_pada = ?,
+                selesai_pada = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (status, sent_at, completed_at, purchase_order_id),
+        )
+        record_workflow_event(
+            conn,
+            document_type="PURCHASE_ORDER",
+            document_id=purchase_order_id,
+            event_type="status_changed",
+            old_status=purchase_order["status"],
+            new_status=status,
+            description=f"Status Purchase Order diubah menjadi {status}.",
+        )
+        conn.commit()
+        conn.close()
+    except (WorkflowIntegrityError, sqlite3.Error) as error:
+        conn.rollback()
+        conn.close()
+        return f"Gagal mengubah status Purchase Order: {error}", 400
 
     return redirect(
         url_for(
@@ -8068,8 +8343,8 @@ def duplicate_purchase_order(purchase_order_id):
             (
                 new_number,
                 purchase_order["supplier_id"],
-                purchase_order["invoice_id"],
-                purchase_order["transaction_id"],
+                None,
+                None,
                 datetime.now().strftime("%Y-%m-%d"),
                 purchase_order["estimasi_datang"],
                 purchase_order["supplier_nama_snapshot"],
@@ -8173,6 +8448,17 @@ def delete_purchase_order(purchase_order_id):
             "PO hanya dapat dihapus ketika berstatus Draft atau Batal.",
             400,
         )
+
+    movement_count = conn.execute(
+        """
+        SELECT COUNT(*) FROM stock_movements
+        WHERE source_type = 'PURCHASE_ORDER' AND source_id = ?
+        """,
+        (purchase_order_id,),
+    ).fetchone()[0]
+    if movement_count:
+        conn.close()
+        return "PO yang mempunyai stock movement tidak dapat dihapus.", 400
 
     conn.execute(
         """
