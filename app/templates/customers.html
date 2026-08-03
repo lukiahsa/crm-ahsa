@@ -344,6 +344,12 @@
                             <td>{{ customer["status"] }}</td>
                             <td>
     <a
+        href="{{ url_for('customer_detail', customer_id=customer['id']) }}"
+        class="btn-import"
+    >
+        Customer 360°
+    </a>
+    <a
         href="{{ url_for('edit_customer', customer_id=customer['id']) }}"
         class="btn-edit"
     >

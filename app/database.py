@@ -166,6 +166,7 @@ def create_tables():
         ("import_batch_id", "TEXT"),
         ("status_aktif", "INTEGER NOT NULL DEFAULT 1"),
         ("updated_at", "TIMESTAMP"),
+        ("pic", "TEXT"),
     ):
         ensure_column(
             conn,
@@ -192,6 +193,66 @@ def create_tables():
         ON customers (email COLLATE NOCASE)
         """
     )
+
+    # ==========================================================
+    # SPRINT 11 — CUSTOMER 360
+    # Additive, idempotent, dan terisolasi dari workflow transaksi/stock.
+    # ==========================================================
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS customer_notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            customer_id INTEGER NOT NULL,
+            note_text TEXT NOT NULL,
+            note_type TEXT NOT NULL DEFAULT 'General',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            created_by TEXT,
+            active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+            FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
+        )
+        """
+    )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS customer_purchase_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            customer_id INTEGER NOT NULL,
+            product_id INTEGER,
+            tanggal_pembelian TEXT NOT NULL,
+            kode_produk_snapshot TEXT,
+            nama_produk_snapshot TEXT NOT NULL,
+            kategori_snapshot TEXT,
+            varian_snapshot TEXT,
+            warna_snapshot TEXT,
+            ukuran_snapshot TEXT,
+            satuan_snapshot TEXT,
+            qty INTEGER NOT NULL CHECK (qty > 0),
+            harga_satuan INTEGER CHECK (harga_satuan IS NULL OR harga_satuan >= 0),
+            total INTEGER CHECK (total IS NULL OR total >= 0),
+            source TEXT,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+            FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
+            FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL
+        )
+        """
+    )
+    for statement in (
+        "CREATE INDEX IF NOT EXISTS idx_customer_purchase_history_customer ON customer_purchase_history(customer_id)",
+        "CREATE INDEX IF NOT EXISTS idx_customer_purchase_history_product ON customer_purchase_history(product_id)",
+        "CREATE INDEX IF NOT EXISTS idx_customer_purchase_history_date ON customer_purchase_history(tanggal_pembelian)",
+        "CREATE INDEX IF NOT EXISTS idx_customer_notes_customer ON customer_notes(customer_id)",
+        "CREATE INDEX IF NOT EXISTS idx_customer_notes_created ON customer_notes(created_at)",
+        "CREATE INDEX IF NOT EXISTS idx_sales_transactions_customer_360 ON sales_transactions(customer_id)",
+        "CREATE INDEX IF NOT EXISTS idx_sales_quotations_customer_360 ON sales_quotations(customer_id)",
+    ):
+        # Dua tabel sales dibuat pada bagian migration berikutnya pada database
+        # baru. Index-nya dibuat ulang dengan aman di akhir create_tables().
+        if "sales_" not in statement:
+            cursor.execute(statement)
 
     cursor.execute(
         """
@@ -3121,6 +3182,15 @@ def create_tables():
         index_name="uq_workflow_events_idempotency",
         where_clause="idempotency_key IS NOT NULL",
     )
+
+    for statement in (
+        "CREATE INDEX IF NOT EXISTS idx_sales_transactions_customer_360 ON sales_transactions(customer_id)",
+        "CREATE INDEX IF NOT EXISTS idx_sales_quotations_customer_360 ON sales_quotations(customer_id)",
+        "CREATE INDEX IF NOT EXISTS idx_sales_invoices_transaction_360 ON sales_invoices(transaction_id)",
+        "CREATE INDEX IF NOT EXISTS idx_receipts_invoice_360 ON payment_receipts(invoice_id, status)",
+        "CREATE INDEX IF NOT EXISTS idx_workflow_events_customer_360 ON workflow_events(customer_id, created_at)",
+    ):
+        cursor.execute(statement)
 
     conn.commit()
     conn.close()

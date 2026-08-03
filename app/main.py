@@ -17,9 +17,18 @@ from customer_import import (
     import_customers_atomic,
     parse_customer_workbook,
     prepare_customer_import,
+    normalize_whatsapp,
     sha256_bytes,
 )
 from database import create_tables, get_connection
+from customer_360 import (
+    add_historical_purchase,
+    add_note,
+    deactivate_note,
+    get_customer_360,
+    search_customer_insights,
+    update_note,
+)
 from product_import import (
     MAX_IMPORT_FILE_SIZE,
     ProductImportError,
@@ -1366,6 +1375,18 @@ def api_customer_search():
             customer_search_result(customer)
             for customer in customers_found
         ]
+        insights = search_customer_insights(
+            conn,
+            [result["id"] for result in results],
+        )
+        for result in results:
+            insight = insights.get(result["id"], {})
+            result.update({
+                "produk_terakhir": insight.get("produk_terakhir"),
+                "tanggal_order_terakhir": insight.get("tanggal_order_terakhir"),
+                "jumlah_transaksi": int(insight.get("jumlah_transaksi") or 0),
+                "klasifikasi_customer": insight.get("klasifikasi_customer", "New"),
+            })
     finally:
         conn.close()
     return jsonify({"results": results})
@@ -1775,6 +1796,14 @@ def edit_customer(customer_id):
             "",
         ).strip()
 
+        pic = request.form.get("pic", "").strip()
+        email = request.form.get("email", "").strip().lower()
+        alamat = request.form.get("alamat", "").strip()
+        status_aktif = 1 if request.form.get("status_aktif", "1") == "1" else 0
+        nama_normalisasi = " ".join(nama.casefold().split())
+        phone = normalize_whatsapp(whatsapp)
+        whatsapp_normalized = phone["normalized"] if phone["valid"] else None
+
         conn.execute(
             """
             UPDATE customers
@@ -1785,7 +1814,15 @@ def edit_customer(customer_id):
                 produk = ?,
                 sumber = ?,
                 status = ?,
-                catatan = ?
+                catatan = ?,
+                pic = ?,
+                email = ?,
+                alamat = ?,
+                status_aktif = ?,
+                nama_normalisasi = ?,
+                whatsapp_raw = ?,
+                whatsapp_normalized = ?,
+                updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
             """,
             (
@@ -1797,6 +1834,13 @@ def edit_customer(customer_id):
                 sumber,
                 status,
                 catatan,
+                pic,
+                email or None,
+                alamat or None,
+                status_aktif,
+                nama_normalisasi,
+                whatsapp or None,
+                whatsapp_normalized,
                 customer_id,
             ),
         )
@@ -1805,7 +1849,7 @@ def edit_customer(customer_id):
         conn.close()
 
         return redirect(
-            url_for("customers")
+            url_for("customer_detail", customer_id=customer_id)
         )
 
     conn.close()
@@ -1814,6 +1858,117 @@ def edit_customer(customer_id):
         "edit_customer.html",
         customer=customer,
     )
+
+
+@app.route("/customers/<int:customer_id>")
+def customer_detail(customer_id):
+    conn = get_connection()
+    try:
+        detail = get_customer_360(
+            conn,
+            customer_id,
+            year=request.args.get("year", "").strip() or None,
+            product=request.args.get("product", "").strip() or None,
+            status=request.args.get("status", "").strip() or None,
+        )
+        if detail is None:
+            return "Customer tidak ditemukan", 404
+        timeline_routes = {
+            "QUOTATION": ("quotation_detail", "quotation_id"),
+            "TRANSACTION": ("transaction_detail", "transaction_id"),
+            "INVOICE": ("transaction_detail", "transaction_id"),
+            "RECEIPT": ("receipt_detail", "receipt_id"),
+            "DELIVERY_ORDER": ("delivery_order_detail", "delivery_order_id"),
+            "PURCHASE_ORDER": ("purchase_order_detail", "purchase_order_id"),
+        }
+        invoice_transactions = {row["id"]: row["transaction_id"] for row in detail["invoices"]}
+        for event in detail["timeline"]:
+            doc_type = str(event.get("document_type") or "").upper()
+            route = timeline_routes.get(doc_type)
+            event["detail_url"] = None
+            if route:
+                endpoint, parameter = route
+                value = event["document_id"]
+                if doc_type == "INVOICE":
+                    value = invoice_transactions.get(value)
+                if value:
+                    event["detail_url"] = url_for(endpoint, **{parameter: value})
+        products_list = conn.execute(
+            "SELECT id,kode_produk,nama_produk,satuan FROM products WHERE status_aktif=1 ORDER BY nama_produk"
+        ).fetchall()
+    finally:
+        conn.close()
+    return render_template(
+        "customer_detail.html",
+        **detail,
+        products=products_list,
+        format_rupiah=format_rupiah,
+        format_tanggal_indonesia=format_tanggal_indonesia,
+    )
+
+
+def _customer_exists(conn, customer_id):
+    return conn.execute("SELECT 1 FROM customers WHERE id=?", (customer_id,)).fetchone() is not None
+
+
+@app.route("/customers/<int:customer_id>/purchase-history", methods=["POST"])
+def customer_add_purchase_history(customer_id):
+    conn = get_connection()
+    try:
+        if not _customer_exists(conn, customer_id):
+            return "Customer tidak ditemukan", 404
+        add_historical_purchase(conn, customer_id, request.form)
+        conn.commit()
+    except (ValueError, sqlite3.Error) as exc:
+        conn.rollback()
+        return str(exc), 400
+    finally:
+        conn.close()
+    return redirect(url_for("customer_detail", customer_id=customer_id))
+
+
+@app.route("/customers/<int:customer_id>/notes", methods=["POST"])
+def customer_add_note(customer_id):
+    conn = get_connection()
+    try:
+        if not _customer_exists(conn, customer_id):
+            return "Customer tidak ditemukan", 404
+        add_note(conn, customer_id, request.form.get("note_text"), request.form.get("note_type", "General"), request.form.get("created_by"))
+        conn.commit()
+    except (ValueError, sqlite3.Error) as exc:
+        conn.rollback()
+        return str(exc), 400
+    finally:
+        conn.close()
+    return redirect(url_for("customer_detail", customer_id=customer_id))
+
+
+@app.route("/customers/<int:customer_id>/notes/<int:note_id>/edit", methods=["POST"])
+def customer_edit_note(customer_id, note_id):
+    conn = get_connection()
+    try:
+        update_note(conn, customer_id, note_id, request.form.get("note_text"), request.form.get("note_type", "General"))
+        conn.commit()
+    except (ValueError, sqlite3.Error) as exc:
+        conn.rollback()
+        return str(exc), 400
+    finally:
+        conn.close()
+    return redirect(url_for("customer_detail", customer_id=customer_id))
+
+
+@app.route("/customers/<int:customer_id>/notes/<int:note_id>/deactivate", methods=["POST"])
+def customer_deactivate_note(customer_id, note_id):
+    conn = get_connection()
+    try:
+        deactivate_note(conn, customer_id, note_id)
+        conn.commit()
+    except (ValueError, sqlite3.Error) as exc:
+        conn.rollback()
+        return str(exc), 400
+    finally:
+        conn.close()
+    return redirect(url_for("customer_detail", customer_id=customer_id))
 
 
 # ==========================================================

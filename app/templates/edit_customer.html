@@ -161,6 +161,21 @@
                 </div>
 
                 <div>
+                    <label>PIC</label>
+                    <input type="text" name="pic" value="{{ customer['pic'] or '' }}">
+                </div>
+
+                <div>
+                    <label>Email</label>
+                    <input type="email" name="email" value="{{ customer['email'] or '' }}">
+                </div>
+
+                <div class="full">
+                    <label>Alamat</label>
+                    <textarea name="alamat">{{ customer['alamat'] or '' }}</textarea>
+                </div>
+
+                <div>
                     <label>Kota / Kabupaten</label>
                     <input
                         type="text"
@@ -240,9 +255,17 @@
                     <textarea name="catatan">{{ customer['catatan'] or '' }}</textarea>
                 </div>
 
+                <div>
+                    <label>Status Aktif</label>
+                    <select name="status_aktif">
+                        <option value="1" {% if customer['status_aktif'] %}selected{% endif %}>Aktif</option>
+                        <option value="0" {% if not customer['status_aktif'] %}selected{% endif %}>Nonaktif</option>
+                    </select>
+                </div>
+
                 <div class="full actions">
                     <button type="submit">Simpan Perubahan</button>
-                    <a href="/customers" class="btn-back">Batal</a>
+                    <a href="{{ url_for('customer_detail', customer_id=customer['id']) }}" class="btn-back">Batal</a>
                 </div>
             </form>
         </section>
