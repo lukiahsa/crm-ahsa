@@ -59,6 +59,16 @@ from workflow_integrity import (
     sync_transaction_status,
     validate_transition,
 )
+from workflow_revision import (
+    QUOTATION_REVISION_ALLOWED,
+    TRANSACTION_CANCELLED,
+    cancel_transaction,
+    link_revision_transaction,
+    mark_quotation_revised,
+    quotation_revision_context,
+    transaction_revision_context,
+    unlock_quotation,
+)
 
 try:
     import qrcode
@@ -126,6 +136,7 @@ TRANSACTION_STATUSES = (
     "Lunas",
     "Selesai",
     "Batal",
+    "Cancelled",
 )
 
 
@@ -179,6 +190,7 @@ QUOTATION_STATUSES = (
     "Deal",
     "Expired",
     "Batal",
+    "Revision Allowed",
 )
 
 IDENTITY_TYPE_FULL = "FULL"
@@ -2876,19 +2888,22 @@ def edit_transaction(transaction_id):
         conn.close()
         return "Transaksi tidak ditemukan.", 404
 
-    if request.method == "POST" and transaction["status"] == "Batal":
+    if request.method == "POST" and transaction["status"] in (
+        "Batal",
+        TRANSACTION_CANCELLED,
+    ):
         record_workflow_event(
             conn,
             document_type="TRANSACTION",
             document_id=transaction_id,
             customer_id=transaction["customer_id"],
             event_type="action_blocked",
-            description="Edit finansial ditolak karena Transaction Batal.",
+            description="Edit finansial ditolak karena Transaction dibatalkan.",
             created_by=transaction["referal"] or "Sistem",
         )
         conn.commit()
         conn.close()
-        return "Transaction Batal tidak dapat diedit finansial.", 400
+        return "Transaction yang dibatalkan tidak dapat diedit finansial.", 400
 
     if request.method == "POST":
         downstream = conn.execute(
@@ -3221,6 +3236,14 @@ def update_transaction_status(transaction_id):
         conn.close()
         return "Transaksi tidak ditemukan.", 404
 
+    if transaction["status"] == TRANSACTION_CANCELLED:
+        conn.close()
+        return "Transaction Cancelled hanya dapat dilanjutkan melalui workflow revisi.", 400
+
+    if status == TRANSACTION_CANCELLED:
+        conn.close()
+        return "Gunakan aksi Cancel Transaction dan isi alasan pembatalan.", 400
+
     if status in ("Invoice", "Terkirim", "Lunas", "Selesai"):
         record_workflow_event(
             conn,
@@ -3376,6 +3399,8 @@ def transaction_detail(transaction_id):
             (invoice["id"],),
         ).fetchone()
 
+    workflow_revision = transaction_revision_context(conn, transaction_id)
+
     conn.close()
 
     return render_template(
@@ -3387,6 +3412,53 @@ def transaction_detail(transaction_id):
         transaction_statuses=TRANSACTION_STATUSES,
         invoice_payment_statuses=INVOICE_PAYMENT_STATUSES,
         identity=transaction_identity,
+        workflow_revision=workflow_revision,
+    )
+
+
+@app.route(
+    "/transactions/<int:transaction_id>/cancel",
+    methods=["POST"],
+)
+def cancel_transaction_workflow(transaction_id):
+    conn = get_connection()
+    try:
+        cancel_transaction(
+            conn,
+            transaction_id,
+            reason=request.form.get("reason", ""),
+            actor=request.form.get("created_by", "").strip() or "Sistem",
+        )
+        conn.commit()
+    except (WorkflowIntegrityError, sqlite3.Error) as error:
+        conn.rollback()
+        conn.close()
+        return str(error), 400
+    conn.close()
+    return redirect(url_for("transaction_detail", transaction_id=transaction_id))
+
+
+@app.route(
+    "/transactions/<int:transaction_id>/unlock-quotation",
+    methods=["POST"],
+)
+def unlock_transaction_quotation(transaction_id):
+    conn = get_connection()
+    try:
+        result = unlock_quotation(
+            conn,
+            transaction_id,
+            reason=request.form.get("reason", "").strip() or None,
+            actor=request.form.get("created_by", "").strip() or "Sistem",
+        )
+        conn.commit()
+    except (WorkflowIntegrityError, sqlite3.Error) as error:
+        conn.rollback()
+        conn.close()
+        return str(error), 400
+    conn.close()
+    return redirect(
+        url_for("quotation_detail", quotation_id=result["quotation_id"])
     )
 
 
@@ -3417,7 +3489,7 @@ def generate_invoice(transaction_id):
         conn.close()
         return "Transaksi tidak ditemukan.", 404
 
-    if transaction["status"] == "Batal":
+    if transaction["status"] in ("Batal", TRANSACTION_CANCELLED):
         record_workflow_event(
             conn,
             document_type="TRANSACTION",
@@ -4392,7 +4464,6 @@ def add_quotation():
                 diskon_global,
                 identity,
             )
-
             nomor_penawaran = generate_document_number(
                 conn=conn,
                 prefix="QT",
@@ -4559,6 +4630,7 @@ def edit_quotation(quotation_id):
     ).fetchall()
 
     if request.method == "POST":
+        revision_edit = quotation["status"] == QUOTATION_REVISION_ALLOWED
         identity_id_raw = request.form.get(
             "identity_id",
             str(current_identity["id"]),
@@ -4610,6 +4682,16 @@ def edit_quotation(quotation_id):
                 diskon_global,
                 identity,
             )
+            next_status = (
+                "Revisi"
+                if revision_edit or quotation["status"] != "Deal"
+                else "Deal"
+            )
+            next_revision = (
+                int(quotation["revisi"] or 0)
+                if revision_edit
+                else int(quotation["revisi"] or 0) + 1
+            )
 
             conn.execute(
                 """
@@ -4637,11 +4719,8 @@ def edit_quotation(quotation_id):
                     customer_kota_snapshot = ?,
                     customer_status_snapshot = ?,
                     customer_minat_snapshot = ?,
-                    status = CASE
-                        WHEN status = 'Deal' THEN status
-                        ELSE 'Revisi'
-                    END,
-                    revisi = revisi + 1,
+                    status = ?,
+                    revisi = ?,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
                 """,
@@ -4669,6 +4748,8 @@ def edit_quotation(quotation_id):
                     customer_data["customer_kota_snapshot"],
                     customer_data["customer_status_snapshot"],
                     customer_data["customer_minat_snapshot"],
+                    next_status,
+                    next_revision,
                     quotation_id,
                 ),
             )
@@ -4686,6 +4767,13 @@ def edit_quotation(quotation_id):
                 quotation_id,
                 prepared_items,
             )
+
+            if revision_edit:
+                mark_quotation_revised(
+                    conn,
+                    quotation_id,
+                    actor=sales or "Sistem",
+                )
 
             conn.commit()
             conn.close()
@@ -4762,6 +4850,7 @@ def quotation_detail(quotation_id):
     ).fetchall()
 
     can_convert = identity_allows_transaction_conversion(identity)
+    revision_workflow = quotation_revision_context(conn, quotation_id)
     conn.close()
 
     whatsapp_number = "".join(
@@ -4809,6 +4898,7 @@ def quotation_detail(quotation_id):
         activities=activities,
         identity=identity,
         can_convert=can_convert,
+        revision_workflow=revision_workflow,
     )
 
 
@@ -4822,16 +4912,23 @@ def update_quotation_status(quotation_id):
     if status not in QUOTATION_STATUSES:
         return "Status penawaran tidak valid.", 400
 
+    if status == QUOTATION_REVISION_ALLOWED:
+        return "Revision Allowed hanya dapat diberikan oleh workflow unlock.", 400
+
     conn = get_connection()
 
     exists = conn.execute(
-        "SELECT id FROM sales_quotations WHERE id = ?",
+        "SELECT id, status FROM sales_quotations WHERE id = ?",
         (quotation_id,),
     ).fetchone()
 
     if exists is None:
         conn.close()
         return "Penawaran tidak ditemukan.", 404
+
+    if exists["status"] == QUOTATION_REVISION_ALLOWED:
+        conn.close()
+        return "Quotation Revision Allowed harus disimpan melalui halaman Edit.", 400
 
     conn.execute(
         """
@@ -5448,6 +5545,10 @@ def convert_quotation_to_transaction(quotation_id):
             400,
         )
 
+    if quotation["status"] == QUOTATION_REVISION_ALLOWED:
+        conn.close()
+        return "Simpan perubahan quotation sebelum dikonversi ulang.", 400
+
     identity = get_effective_identity(
         DOCUMENT_TYPE_QUOTATION,
         quotation_id,
@@ -5675,6 +5776,8 @@ def convert_quotation_to_transaction(quotation_id):
             (transaction_id, quotation_id),
         )
 
+        link_revision_transaction(conn, quotation_id, transaction_id)
+
         add_quotation_activity(
             conn,
             quotation_id,
@@ -5778,7 +5881,7 @@ def delivery_orders():
             ON delivery_orders.transaction_id =
                sales_transactions.id
         WHERE delivery_orders.id IS NULL
-          AND sales_transactions.status != 'Batal'
+          AND sales_transactions.status NOT IN ('Batal', 'Cancelled')
         ORDER BY sales_transactions.id DESC
         """
     ).fetchall()
@@ -5827,7 +5930,7 @@ def generate_delivery_order(transaction_id):
         conn.close()
         return "Transaksi tidak ditemukan.", 404
 
-    if transaction["status"] == "Batal":
+    if transaction["status"] in ("Batal", TRANSACTION_CANCELLED):
         record_workflow_event(
             conn,
             document_type="TRANSACTION",
@@ -7360,7 +7463,7 @@ def generate_purchase_order_from_invoice(transaction_id):
         conn.close()
         return "Transaksi tidak ditemukan.", 404
 
-    if transaction["status"] == "Batal":
+    if transaction["status"] in ("Batal", TRANSACTION_CANCELLED):
         record_workflow_event(
             conn,
             document_type="TRANSACTION",
