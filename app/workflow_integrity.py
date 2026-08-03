@@ -131,8 +131,8 @@ def _transaction_workflow_rows(conn, transaction_id):
 
 def derive_transaction_status(transaction, invoice, delivery_order):
     current_status = transaction["status"] or "Draft"
-    if current_status == "Batal":
-        return "Batal"
+    if current_status in ("Batal", "Cancelled"):
+        return current_status
 
     invoice_active = invoice is not None and invoice["status_pembayaran"] != "Batal"
     paid = invoice_active and invoice["status_pembayaran"] == "Lunas"
@@ -148,7 +148,7 @@ def derive_transaction_status(transaction, invoice, delivery_order):
         return "Terkirim"
     if invoice_active:
         return "Invoice"
-    if transaction["source_quotation_id"]:
+    if transaction["source_quotation_id"] and target_status != "Cancelled":
         return "Closing"
     return "Draft"
 

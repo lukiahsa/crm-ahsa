@@ -1625,6 +1625,53 @@ def create_tables():
         """
     )
 
+    # ==========================================================
+    # SPRINT 12 — WORKFLOW REVISION & CANCELLATION ENGINE
+    # Revision history terpisah menjaga nomor quotation tetap sama.
+    # ==========================================================
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS quotation_revisions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            quotation_id INTEGER NOT NULL,
+            revision_no INTEGER NOT NULL CHECK (revision_no >= 1),
+            reason TEXT NOT NULL,
+            old_transaction_id INTEGER,
+            new_transaction_id INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            created_by TEXT,
+            FOREIGN KEY (quotation_id)
+                REFERENCES sales_quotations(id)
+                ON DELETE CASCADE,
+            FOREIGN KEY (old_transaction_id)
+                REFERENCES sales_transactions(id)
+                ON DELETE SET NULL,
+            FOREIGN KEY (new_transaction_id)
+                REFERENCES sales_transactions(id)
+                ON DELETE SET NULL,
+            UNIQUE (quotation_id, revision_no)
+        )
+        """
+    )
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_quotation_revisions_quotation
+        ON quotation_revisions(quotation_id, revision_no DESC)
+        """
+    )
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_quotation_revisions_old_transaction
+        ON quotation_revisions(old_transaction_id)
+        """
+    )
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_quotation_revisions_new_transaction
+        ON quotation_revisions(new_transaction_id)
+        """
+    )
+
 
     # ==========================================================
     # SPRINT 10.0 — COMPANY PROFILE
