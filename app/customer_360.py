@@ -1,6 +1,6 @@
 """Read-model and isolated writes for Sprint 11 Customer 360."""
 
-from collections import defaultdict
+from datetime import datetime
 
 
 NOTE_TYPES = (
@@ -339,6 +339,11 @@ def _timeline(conn, customer_id):
 
 
 def add_historical_purchase(conn, customer_id, data):
+    purchase_date = str(data.get("tanggal_pembelian") or "").strip()
+    try:
+        datetime.strptime(purchase_date, "%Y-%m-%d")
+    except ValueError as exc:
+        raise ValueError("Tanggal pembelian wajib berformat YYYY-MM-DD dan valid.") from exc
     qty = int(data.get("qty") or 0)
     if qty <= 0:
         raise ValueError("Qty wajib berupa integer positif.")
@@ -377,7 +382,7 @@ def add_historical_purchase(conn, customer_id, data):
           ukuran_snapshot, satuan_snapshot, qty, harga_satuan, total, source, notes
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (customer_id, product_id, data.get("tanggal_pembelian"), snapshots["kode"],
+        (customer_id, product_id, purchase_date, snapshots["kode"],
          snapshots["nama"], snapshots["kategori"], snapshots["varian"], snapshots["warna"],
          snapshots["ukuran"], snapshots["satuan"], qty, price,
          price * qty if price is not None else None, data.get("source"), data.get("notes")),

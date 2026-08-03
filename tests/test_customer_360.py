@@ -266,6 +266,21 @@ class Customer360RegressionTest(unittest.TestCase):
     def test_foreign_key_check_is_empty(self):
         self.historical(); conn=database.get_connection(); self.assertEqual(conn.execute("PRAGMA foreign_key_check").fetchall(),[]); conn.close()
 
+    def test_invalid_historical_date_is_rejected_without_writes(self):
+        response = self.client.post(
+            f"/customers/{self.customer_id}/purchase-history",
+            data={"tanggal_pembelian":"2026-02-31","product_id":self.product_id,"qty":"1"},
+        )
+        self.assertEqual(response.status_code, 400)
+        conn=database.get_connection(); self.assertEqual(conn.execute("SELECT COUNT(*) FROM customer_purchase_history").fetchone()[0],0); conn.close()
+
+    def test_minimal_customer_can_be_completed_incrementally(self):
+        conn=database.get_connection(); cid=conn.execute("INSERT INTO customers(nama,whatsapp) VALUES('Customer Minimal','081211111111')").lastrowid; conn.commit(); conn.close()
+        response=self.client.post(f"/customers/{cid}/edit",data={"nama":"Customer Minimal","whatsapp":"081211111111","instansi":"PT Lengkap","pic":"Bapak PIC","email":"PIC@EXAMPLE.COM","alamat":"Bandung","kota":"Bandung","produk":"Tangga","sumber":"Import","status":"Existing Customer","status_aktif":"1","catatan":""})
+        self.assertEqual(response.status_code,302)
+        conn=database.get_connection(); row=conn.execute("SELECT instansi,pic,email,alamat,whatsapp_normalized FROM customers WHERE id=?",(cid,)).fetchone(); conn.close()
+        self.assertEqual(tuple(row),("PT Lengkap","Bapak PIC","pic@example.com","Bandung","6281211111111"))
+
 
 if __name__ == "__main__":
     unittest.main()
