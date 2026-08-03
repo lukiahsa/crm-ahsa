@@ -87,6 +87,17 @@ class ExecutiveDashboardRegressionTest(unittest.TestCase):
             """INSERT INTO customers(nama,status,status_aktif,created_at)
                VALUES('Customer Stale','Existing Customer',1,'2025-01-01')"""
         ).lastrowid
+        self.customer_never = conn.execute(
+            """INSERT INTO customers(nama,status,status_aktif,created_at)
+               VALUES('Customer Never','Prospek',1,'2025-01-01')"""
+        ).lastrowid
+        conn.execute(
+            """INSERT INTO customer_purchase_history(
+                   customer_id, product_id, tanggal_pembelian, nama_produk_snapshot,
+                   qty, active)
+               VALUES(?,?, '2025-01-02', 'Historical Stale', 1, 1)""",
+            (self.customer_stale, self.product_bin),
+        )
         warehouse = conn.execute(
             "INSERT INTO warehouses(kode_gudang,nama_gudang,aktif) VALUES('WH-DASH','Dashboard',1)"
         ).lastrowid
