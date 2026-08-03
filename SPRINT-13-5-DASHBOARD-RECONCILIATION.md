@@ -93,8 +93,8 @@ Setiap exception melakukan rollback penuh. Customer, product, Historical Purchas
 ## Test, performance, dan integrity
 
 - Existing baseline: 163 test.
-- Sprint 13.5: 43 test baru.
-- Total: 206 test, seluruhnya lulus.
+- Sprint 13.5: 47 test baru.
+- Total: 210 test, seluruhnya lulus.
 - Dashboard query plan: 58 SELECT/CTE, tanpa N+1.
 - Benchmark 100 render pada SQLite UAT sintetis: median 0,609 ms; p95 0,870 ms; maksimum 1,158 ms.
 - `PRAGMA integrity_check`: `ok`.

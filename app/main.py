@@ -3404,6 +3404,7 @@ def transaction_detail(transaction_id):
         workflow_revision=workflow_revision,
         purge_eligibility=purge_eligibility,
         mark_test_eligibility=mark_test_eligibility,
+        format_rupiah=format_rupiah,
     )
 
 

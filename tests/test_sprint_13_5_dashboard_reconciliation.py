@@ -381,6 +381,38 @@ class Sprint135DashboardReconciliationTest(unittest.TestCase):
     def test_43_foreign_key_check_is_empty(self):
         self.assertEqual(self.conn.execute("PRAGMA foreign_key_check").fetchall(), [])
 
+    def test_44_invoice_kpi_uses_invoice_business_date(self):
+        self.conn.execute(
+            """INSERT INTO sales_invoices(transaction_id,nomor_invoice,tanggal_invoice,
+                   status_pembayaran) VALUES(?,'INV-BUSINESS-DATE','2026-07-31','Belum Lunas')""",
+            (self.official,),
+        )
+        self.conn.commit()
+        result = self.dashboard("2026-07-31", "2026-07-31")
+        self.assertEqual(result["financial"]["outstanding_invoice"], 1)
+        self.assertEqual(result["financial"]["receivable"], 120000)
+
+    def test_45_legacy_or_conversion_insert_defaults_to_non_test(self):
+        transaction_id = self.conn.execute(
+            """INSERT INTO sales_transactions(nomor_transaksi,customer_id,tanggal,
+                   jenis_penjualan,status) VALUES('TRX-DEFAULT-NON-TEST',?,'2026-08-01','Direct','Draft')""",
+            (self.geugeu,),
+        ).lastrowid
+        self.assertEqual(self.conn.execute("SELECT is_test FROM sales_transactions WHERE id=?", (transaction_id,)).fetchone()[0], 0)
+
+    def test_46_non_test_detail_never_shows_hard_delete(self):
+        client = main.app.test_client()
+        response = client.get(f"/transactions/{self.official}")
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(b"Hapus Transaksi Uji Coba", response.data)
+
+    def test_47_eligible_test_detail_shows_controlled_purge(self):
+        transaction_id = self._isolated_test("UI")
+        client = main.app.test_client()
+        response = client.get(f"/transactions/{transaction_id}")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Hapus Transaksi Uji Coba", response.data)
+
 
 if __name__ == "__main__":
     unittest.main()

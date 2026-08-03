@@ -223,7 +223,13 @@ def _money_summary(conn, filters, start, end):
 
 
 def _invoice_summary(conn, filters, start, end):
-    where, params = _transaction_where(filters, start, end)
+    where, params = _transaction_where(filters)
+    invoice_conditions = [
+        "date(i.tanggal_invoice) >= date(?)",
+        "date(i.tanggal_invoice) <= date(?)",
+        where,
+    ]
+    invoice_params = [start, end] + params
     row = conn.execute(
         f"""
         WITH paid AS (
@@ -240,9 +246,9 @@ def _invoice_summary(conn, filters, start, end):
         FROM sales_invoices i
         JOIN sales_transactions t ON t.id = i.transaction_id
         LEFT JOIN paid ON paid.invoice_id = i.id
-        WHERE {where}
+        WHERE {' AND '.join(invoice_conditions)}
         """,
-        tuple(params),
+        tuple(invoice_params),
     ).fetchone()
     return {
         "outstanding_count": int(row["outstanding_count"] or 0),
@@ -883,7 +889,12 @@ def _owner_alerts(conn, filters):
         "late_po": late_po,
         "expired_quotation": expired,
         "total": total,
-        "level": "Safe" if total == 0 else ("Critical" if overdue else "Warning"),
+        "level": (
+            "Safe" if total == 0 else
+            "Critical" if overdue else
+            "Warning" if low_stock or late_po else
+            "Info"
+        ),
     }
 
 
