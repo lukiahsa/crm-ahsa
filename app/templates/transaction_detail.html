@@ -579,12 +579,12 @@
             <h2>Workflow</h2>
             <div class="info-grid">
                 <div class="info-box"><span class="info-label">Status</span><div class="info-value">{% if workflow_revision['display_status'] == 'Revision Allowed' %}Revision Allowed{% elif transaction['status'] == 'Cancelled' %}Cancelled{% else %}Active{% endif %}</div></div>
-                <div class="info-box"><span class="info-label">Quotation Terkait</span><div class="info-value">{% if workflow_revision['can_unlock']['quotation_id'] %}<a href="{{ url_for('quotation_detail', quotation_id=workflow_revision['can_unlock']['quotation_id']) }}">Buka Quotation</a>{% else %}-{% endif %}</div></div>
+                {% if module_enabled('quotation') %}<div class="info-box"><span class="info-label">Quotation Terkait</span><div class="info-value">{% if workflow_revision['can_unlock']['quotation_id'] %}<a href="{{ url_for('quotation_detail', quotation_id=workflow_revision['can_unlock']['quotation_id']) }}">Buka Quotation</a>{% else %}-{% endif %}</div></div>{% endif %}
                 <div class="info-box"><span class="info-label">Revision</span><div class="info-value">{% if workflow_revision['revision'] %}Revision {{ workflow_revision['revision']['revision_no'] }}{% else %}-{% endif %}</div></div>
             </div>
             <div class="header-actions" style="margin-top:16px">
                 {% if workflow_revision['can_cancel']['allowed'] %}<button class="btn btn-danger" type="button" onclick="document.getElementById('cancel-dialog').showModal()">Cancel Transaction</button>{% endif %}
-                {% if transaction['status'] == 'Cancelled' and workflow_revision['can_unlock']['allowed'] %}
+                {% if module_enabled('quotation') and transaction['status'] == 'Cancelled' and workflow_revision['can_unlock']['allowed'] %}
                 <form method="post" action="{{ url_for('unlock_transaction_quotation', transaction_id=transaction['id']) }}" onsubmit="return confirm('Unlock quotation untuk revisi?');"><button class="btn btn-primary" type="submit">Unlock Quotation</button></form>
                 {% endif %}
                 {% if not transaction['is_test'] and mark_test_eligibility['allowed'] %}
@@ -616,7 +616,7 @@
             <h2>Alur Dokumen</h2>
 
             <div class="procurement-grid">
-                <div class="document-box">
+                {% if module_enabled('invoice') %}<div class="document-box">
                     <h3>Invoice Penjualan</h3>
 
                     {% if invoice %}
@@ -640,10 +640,35 @@
                         <p>
                             Invoice belum dibuat untuk transaksi ini.
                         </p>
+                        <form method="post" action="{{ url_for('generate_invoice', transaction_id=transaction['id']) }}"><button class="btn btn-info" type="submit">Generate Invoice</button></form>
                     {% endif %}
-                </div>
+                </div>{% endif %}
 
-                <div class="document-box">
+                {% if module_enabled('delivery_order') %}<div class="document-box">
+                    <h3>Delivery Order</h3>
+                    {% if delivery_order %}
+                        <div class="document-number">{{ delivery_order["nomor_surat_jalan"] }}</div>
+                        <p>Status: <strong>{{ delivery_order["status"] }}</strong></p>
+                        <a href="{{ url_for('delivery_order_detail', delivery_order_id=delivery_order['id']) }}" class="btn btn-info">Buka Delivery Order</a>
+                    {% else %}
+                        <p>Delivery Order dapat dibuat langsung dari Transaction.</p>
+                        <form method="post" action="{{ url_for('generate_delivery_order', transaction_id=transaction['id']) }}"><button class="btn btn-info" type="submit">Generate Delivery Order</button></form>
+                    {% endif %}
+                </div>{% endif %}
+
+                {% if module_enabled('receipt') %}<div class="document-box">
+                    <h3>Receipt</h3>
+                    {% if transaction_receipt %}
+                        <div class="document-number">{{ transaction_receipt["nomor_kwitansi"] }}</div>
+                        <p>Nominal: <strong>{{ format_rupiah(transaction_receipt["nominal"]) }}</strong></p>
+                        <a href="{{ url_for('transaction_receipt_detail', receipt_id=transaction_receipt['id']) }}" class="btn btn-info">Buka Receipt</a>
+                    {% else %}
+                        <p>Receipt dapat dibuat langsung tanpa membuat Invoice.</p>
+                        <a href="{{ url_for('generate_transaction_receipt', transaction_id=transaction['id']) }}" class="btn btn-info">Generate Receipt</a>
+                    {% endif %}
+                </div>{% endif %}
+
+                {% if module_enabled('purchase_order') %}<div class="document-box">
                     <h3>Purchase Order</h3>
 
                     {% if purchase_order %}
@@ -665,10 +690,10 @@
                         >
                             Buka Purchase Order
                         </a>
-                    {% elif invoice %}
+                    {% else %}
                         <p>
                             Purchase Order belum dibuat. Semua item dan harga modal
-                            dapat disalin otomatis dari Invoice.
+                            disalin langsung dari Transaction.
                         </p>
 
                         <a
@@ -677,13 +702,8 @@
                         >
                             Generate Purchase Order
                         </a>
-                    {% else %}
-                        <p>
-                            Buat Invoice terlebih dahulu sebelum membuat
-                            Purchase Order.
-                        </p>
                     {% endif %}
-                </div>
+                </div>{% endif %}
             </div>
         </div>
 

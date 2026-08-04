@@ -1531,6 +1531,37 @@ def create_tables():
         """
     )
 
+    # Direct ATCA receipt: additive child document of Transaction. It is
+    # intentionally isolated from invoice payment reconciliation.
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS transaction_receipts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nomor_kwitansi TEXT NOT NULL UNIQUE,
+            transaction_id INTEGER NOT NULL,
+            tanggal TEXT NOT NULL,
+            jenis_pembayaran TEXT NOT NULL DEFAULT 'Pembayaran',
+            metode_pembayaran TEXT NOT NULL,
+            bank TEXT,
+            nomor_referensi TEXT,
+            nominal INTEGER NOT NULL CHECK (nominal > 0),
+            untuk_pembayaran TEXT NOT NULL,
+            catatan TEXT,
+            status TEXT NOT NULL DEFAULT 'Diterbitkan',
+            created_by TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (transaction_id)
+                REFERENCES sales_transactions (id)
+                ON DELETE RESTRICT
+        )
+        """
+    )
+    cursor.execute(
+        """CREATE INDEX IF NOT EXISTS idx_transaction_receipts_transaction
+           ON transaction_receipts(transaction_id, status)"""
+    )
+
 
     # ==========================================================
     # ERP SETTINGS & OPTIONAL INVENTORY

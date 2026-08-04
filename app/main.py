@@ -2941,9 +2941,12 @@ def edit_transaction(transaction_id):
                 EXISTS(
                     SELECT 1 FROM payment_receipts
                     WHERE transaction_id = ?
+                ) OR EXISTS(
+                    SELECT 1 FROM transaction_receipts
+                    WHERE transaction_id = ? AND status != 'Void'
                 ) AS has_receipt
             """,
-            (transaction_id, transaction_id, transaction_id),
+            (transaction_id, transaction_id, transaction_id, transaction_id),
         ).fetchone()
         if any(int(downstream[key] or 0) for key in downstream.keys()):
             record_workflow_event(
@@ -3294,9 +3297,13 @@ def update_transaction_status(transaction_id):
                 EXISTS(
                     SELECT 1 FROM purchase_orders
                     WHERE transaction_id = ? AND status != 'Batal'
-                ) AS active_purchase
+                ) AS active_purchase,
+                EXISTS(
+                    SELECT 1 FROM transaction_receipts
+                    WHERE transaction_id = ? AND status != 'Void'
+                ) AS active_receipt
             """,
-            (transaction_id, transaction_id, transaction_id),
+            (transaction_id, transaction_id, transaction_id, transaction_id),
         ).fetchone()
         if any(int(active_downstream[key] or 0) for key in active_downstream.keys()):
             conn.close()
@@ -3309,8 +3316,9 @@ def update_transaction_status(transaction_id):
                 (SELECT COUNT(*) FROM sales_invoices WHERE transaction_id = ?)
               + (SELECT COUNT(*) FROM delivery_orders WHERE transaction_id = ?)
               + (SELECT COUNT(*) FROM payment_receipts WHERE transaction_id = ?)
+              + (SELECT COUNT(*) FROM transaction_receipts WHERE transaction_id = ?)
             """,
-            (transaction_id, transaction_id, transaction_id),
+            (transaction_id, transaction_id, transaction_id, transaction_id),
         ).fetchone()[0]
         if downstream_count:
             conn.close()
@@ -3397,27 +3405,42 @@ def transaction_detail(transaction_id):
         (transaction_id,),
     ).fetchall()
 
-    invoice = conn.execute(
-        """
-        SELECT *
-        FROM sales_invoices
-        WHERE transaction_id = ?
-        """,
-        (transaction_id,),
-    ).fetchone()
+    states = getattr(g, "module_states", {})
+    invoice = None
+    if states.get("invoice", {}).get("enabled", True):
+        invoice = conn.execute(
+            """SELECT * FROM sales_invoices WHERE transaction_id = ?""",
+            (transaction_id,),
+        ).fetchone()
 
     purchase_order = None
-
-    if invoice is not None:
+    if states.get("purchase_order", {}).get("enabled", True):
         purchase_order = conn.execute(
             """
             SELECT *
             FROM purchase_orders
-            WHERE invoice_id = ?
+            WHERE transaction_id = ?
             ORDER BY id DESC
             LIMIT 1
             """,
-            (invoice["id"],),
+            (transaction_id,),
+        ).fetchone()
+
+    delivery_order = None
+    if states.get("delivery_order", {}).get("enabled", True):
+        delivery_order = conn.execute(
+            """SELECT * FROM delivery_orders
+               WHERE transaction_id = ? ORDER BY id DESC LIMIT 1""",
+            (transaction_id,),
+        ).fetchone()
+
+    transaction_receipt = None
+    if states.get("receipt", {}).get("enabled", True):
+        transaction_receipt = conn.execute(
+            """SELECT * FROM transaction_receipts
+               WHERE transaction_id = ? AND status != 'Void'
+               ORDER BY id DESC LIMIT 1""",
+            (transaction_id,),
         ).fetchone()
 
     workflow_revision = transaction_revision_context(conn, transaction_id)
@@ -3432,6 +3455,8 @@ def transaction_detail(transaction_id):
         items=items,
         invoice=invoice,
         purchase_order=purchase_order,
+        delivery_order=delivery_order,
+        transaction_receipt=transaction_receipt,
         transaction_statuses=TRANSACTION_STATUSES,
         invoice_payment_statuses=INVOICE_PAYMENT_STATUSES,
         identity=transaction_identity,
@@ -6515,14 +6540,14 @@ def update_delivery_order_status(delivery_order_id):
                 )
             )
 
-        if status == "Terkirim":
+        if inventory_is_enabled(conn) and status == "Terkirim":
             post_stock_for_document(
                 conn,
                 "DELIVERY_ORDER",
                 delivery_order_id,
                 actor=delivery_order["sales"] or "Sistem",
             )
-        elif status == "Batal":
+        elif inventory_is_enabled(conn) and status == "Batal":
             reverse_stock_for_document(
                 conn,
                 "DELIVERY_ORDER",
@@ -6722,6 +6747,151 @@ def delete_delivery_order(delivery_order_id):
 # ==========================================================
 # RECEIPTS / KWITANSI
 # ==========================================================
+def generate_direct_receipt_number(conn, tanggal):
+    """Keep the existing KWT format while avoiding cross-table collisions."""
+    prefix = f"KWT/{tanggal[0:4]}/{tanggal[5:7]}/"
+    rows = conn.execute(
+        """SELECT nomor_kwitansi FROM payment_receipts WHERE nomor_kwitansi LIKE ?
+           UNION ALL
+           SELECT nomor_kwitansi FROM transaction_receipts WHERE nomor_kwitansi LIKE ?""",
+        (f"{prefix}%", f"{prefix}%"),
+    ).fetchall()
+    highest = 0
+    for row in rows:
+        try:
+            highest = max(highest, int(row["nomor_kwitansi"].rsplit("/", 1)[-1]))
+        except (AttributeError, TypeError, ValueError):
+            continue
+    return f"{prefix}{highest + 1:06d}"
+
+
+@app.route(
+    "/transactions/<int:transaction_id>/receipt/generate",
+    methods=["GET", "POST"],
+)
+def generate_transaction_receipt(transaction_id):
+    """Create a receipt directly from Transaction without an Invoice dependency."""
+    conn = get_connection()
+    transaction = conn.execute(
+        """SELECT t.*, c.nama AS customer_nama, c.instansi AS customer_instansi
+           FROM sales_transactions t
+           LEFT JOIN customers c ON c.id = t.customer_id
+           WHERE t.id = ?""",
+        (transaction_id,),
+    ).fetchone()
+    if transaction is None:
+        conn.close()
+        return "Transaksi tidak ditemukan.", 404
+    if transaction["status"] in ("Batal", TRANSACTION_CANCELLED):
+        conn.close()
+        return "Transaksi Batal tidak dapat membuat Receipt.", 400
+
+    existing = conn.execute(
+        """SELECT id FROM transaction_receipts
+           WHERE transaction_id = ? AND status != 'Void'
+           ORDER BY id DESC LIMIT 1""",
+        (transaction_id,),
+    ).fetchone()
+    if existing is not None and request.method == "GET":
+        conn.close()
+        return redirect(
+            url_for("transaction_receipt_detail", receipt_id=existing["id"])
+        )
+
+    if request.method == "POST":
+        tanggal = request.form.get("tanggal", "").strip()
+        metode = request.form.get("metode_pembayaran", "").strip()
+        jenis = request.form.get("jenis_pembayaran", "Pembayaran").strip()
+        nominal = parse_integer(request.form.get("nominal", "0"))
+        if not tanggal:
+            conn.close()
+            return "Tanggal kwitansi wajib diisi.", 400
+        if metode not in RECEIPT_METHODS:
+            conn.close()
+            return "Metode pembayaran tidak valid.", 400
+        if nominal <= 0:
+            conn.close()
+            return "Nominal pembayaran harus lebih dari 0.", 400
+        total_transaction = max(int(transaction["total_penjualan"] or 0), 0)
+        if total_transaction and nominal > total_transaction:
+            conn.close()
+            return "Nominal pembayaran melebihi nilai Transaction.", 400
+        description = request.form.get("untuk_pembayaran", "").strip()
+        if not description:
+            description = f"{jenis} Transaction {transaction['nomor_transaksi']}"
+        try:
+            nomor = generate_direct_receipt_number(conn, tanggal)
+            cursor = conn.execute(
+                """INSERT INTO transaction_receipts (
+                       nomor_kwitansi, transaction_id, tanggal, jenis_pembayaran,
+                       metode_pembayaran, bank, nomor_referensi, nominal,
+                       untuk_pembayaran, catatan, status, created_by
+                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Diterbitkan', ?)""",
+                (
+                    nomor,
+                    transaction_id,
+                    tanggal,
+                    jenis or "Pembayaran",
+                    metode,
+                    request.form.get("bank", "").strip() or None,
+                    request.form.get("nomor_referensi", "").strip() or None,
+                    nominal,
+                    description,
+                    request.form.get("catatan", "").strip() or None,
+                    request.form.get("created_by", "").strip() or "Sistem",
+                ),
+            )
+            receipt_id = cursor.lastrowid
+            record_workflow_event(
+                conn,
+                document_type="TRANSACTION_RECEIPT",
+                document_id=receipt_id,
+                customer_id=transaction["customer_id"],
+                event_type="created",
+                description=f"Receipt langsung {nomor} dibuat dari Transaction.",
+                created_by=request.form.get("created_by", "").strip() or "Sistem",
+            )
+            conn.commit()
+        except sqlite3.Error as error:
+            conn.rollback()
+            conn.close()
+            return f"Gagal membuat Receipt: {error}", 400
+        conn.close()
+        return redirect(url_for("transaction_receipt_detail", receipt_id=receipt_id))
+
+    conn.close()
+    return render_template(
+        "transaction_receipt_add.html",
+        transaction=transaction,
+        receipt_types=RECEIPT_TYPES,
+        receipt_methods=RECEIPT_METHODS,
+        today=datetime.now().strftime("%Y-%m-%d"),
+        format_rupiah=format_rupiah,
+    )
+
+
+@app.route("/transaction-receipts/<int:receipt_id>")
+def transaction_receipt_detail(receipt_id):
+    conn = get_connection()
+    receipt = conn.execute(
+        """SELECT r.*, t.nomor_transaksi, t.tanggal AS tanggal_transaksi,
+                  c.nama AS customer_nama, c.instansi AS customer_instansi
+           FROM transaction_receipts r
+           INNER JOIN sales_transactions t ON t.id = r.transaction_id
+           LEFT JOIN customers c ON c.id = t.customer_id
+           WHERE r.id = ?""",
+        (receipt_id,),
+    ).fetchone()
+    conn.close()
+    if receipt is None:
+        return "Receipt tidak ditemukan.", 404
+    return render_template(
+        "transaction_receipt_detail.html",
+        receipt=receipt,
+        format_rupiah=format_rupiah,
+    )
+
+
 def add_receipt_activity(
     conn,
     receipt_id,
@@ -7517,6 +7687,10 @@ def stock_movements(warehouse_id, product_id):
     "/transactions/<int:transaction_id>/invoice/purchase-order/generate",
     methods=["GET", "POST"],
 )
+@app.route(
+    "/transactions/<int:transaction_id>/purchase-order/generate",
+    methods=["GET", "POST"],
+)
 def generate_purchase_order_from_invoice(transaction_id):
     conn = get_connection()
 
@@ -7561,24 +7735,13 @@ def generate_purchase_order_from_invoice(transaction_id):
         (transaction_id,),
     ).fetchone()
 
-    if invoice is None:
-        conn.close()
-        return (
-            "Invoice belum dibuat. Buat invoice terlebih dahulu.",
-            400,
-        )
-
-    if invoice["status_pembayaran"] == "Batal":
-        record_workflow_event(
-            conn,
-            document_type="INVOICE",
-            document_id=invoice["id"],
-            customer_id=transaction["customer_id"],
-            event_type="action_blocked",
-            description="Pembuatan Purchase Order ditolak karena Invoice Batal.",
-            created_by=transaction["referal"] or "Sistem",
-        )
-        conn.commit()
+    # Preserve the legacy Invoice-origin contract on its historical URL.
+    # The new ATCA URL below remains Transaction-origin and invoice-independent.
+    if (
+        invoice is not None
+        and invoice["status_pembayaran"] == "Batal"
+        and "/invoice/purchase-order/" in request.path
+    ):
         conn.close()
         return "Invoice Batal tidak dapat membuat Purchase Order.", 400
 
@@ -7586,11 +7749,11 @@ def generate_purchase_order_from_invoice(transaction_id):
         """
         SELECT *
         FROM purchase_orders
-        WHERE invoice_id = ?
+        WHERE transaction_id = ?
         ORDER BY id DESC
         LIMIT 1
         """,
-        (invoice["id"],),
+        (transaction_id,),
     ).fetchone()
 
     if existing_po is not None:
@@ -7683,7 +7846,7 @@ def generate_purchase_order_from_invoice(transaction_id):
 
         if not invoice_items:
             conn.close()
-            return "Invoice tidak memiliki item.", 400
+            return "Transaction tidak memiliki item.", 400
 
         prepared_items = []
         subtotal = 0
@@ -7786,7 +7949,7 @@ def generate_purchase_order_from_invoice(transaction_id):
                 (
                     nomor_po,
                     supplier_id,
-                    invoice["id"],
+                    invoice["id"] if invoice else None,
                     transaction_id,
                     datetime.now().strftime("%Y-%m-%d"),
                     estimasi_datang or None,
@@ -7850,18 +8013,16 @@ def generate_purchase_order_from_invoice(transaction_id):
                     ),
                 )
 
-            conn.execute(
-                """
-                UPDATE sales_invoices
-                SET purchase_order_id = ?,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
-                """,
-                (
-                    purchase_order_id,
-                    invoice["id"],
-                ),
-            )
+            if invoice is not None:
+                conn.execute(
+                    """
+                    UPDATE sales_invoices
+                    SET purchase_order_id = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                    """,
+                    (purchase_order_id, invoice["id"]),
+                )
 
             conn.commit()
             conn.close()
@@ -8564,13 +8725,13 @@ def update_purchase_order_status(purchase_order_id):
                 )
             )
 
-        if status == "Barang Diterima":
+        if inventory_is_enabled(conn) and status == "Barang Diterima":
             post_stock_for_document(
                 conn,
                 "PURCHASE_ORDER",
                 purchase_order_id,
             )
-        elif status == "Batal":
+        elif inventory_is_enabled(conn) and status == "Batal":
             reverse_stock_for_document(
                 conn,
                 "PURCHASE_ORDER",

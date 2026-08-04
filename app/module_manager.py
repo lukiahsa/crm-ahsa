@@ -98,9 +98,15 @@ def module_for_request(path, endpoint=None):
         return "delivery_order"
     if path.startswith("/transactions/") and "/receipt" in path:
         return "receipt"
-    if path.startswith("/receipts") or path.startswith("/invoices/") and "/receipts" in path:
+    if (
+        path.startswith("/receipts")
+        or path.startswith("/transaction-receipts")
+        or path.startswith("/invoices/") and "/receipts" in path
+    ):
         return "receipt"
     if path.startswith("/transactions/") and "/invoice" in path:
+        return "invoice"
+    if path.startswith("/invoices"):
         return "invoice"
     if path.startswith("/quotations"):
         return "quotation"
