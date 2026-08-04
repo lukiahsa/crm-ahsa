@@ -6,7 +6,7 @@ import io
 import sqlite3
 from datetime import datetime
 
-from flask import Flask, jsonify, redirect, render_template, request, url_for
+from flask import Flask, abort, g, jsonify, redirect, render_template, request, url_for
 from werkzeug.utils import secure_filename
 
 from customer_import import (
@@ -22,6 +22,13 @@ from customer_import import (
 )
 from database import create_tables, get_connection
 from dashboard_bi import build_executive_dashboard
+from module_manager import (
+    ModuleManagerError,
+    get_module_states,
+    module_for_request,
+    module_is_enabled,
+    update_optional_modules,
+)
 from customer_360 import (
     add_historical_purchase,
     add_note,
@@ -87,6 +94,33 @@ except ImportError:
 app = Flask(__name__)
 
 create_tables()
+
+
+@app.before_request
+def enforce_optional_module_policy():
+    """Block optional module routes before their workflow code can run."""
+    conn = get_connection()
+    try:
+        g.module_states = get_module_states(conn)
+        owned_module = module_for_request(request.path, request.endpoint)
+        if owned_module and not module_is_enabled(conn, owned_module):
+            abort(404)
+    finally:
+        conn.close()
+
+
+@app.context_processor
+def inject_module_policy():
+    states = getattr(g, "module_states", {})
+
+    def enabled(module_key):
+        state = states.get(module_key)
+        return True if state is None else bool(state["enabled"])
+
+    return {
+        "module_enabled": enabled,
+        "module_states": states,
+    }
 
 
 
@@ -7323,6 +7357,13 @@ def inventory_settings():
             """,
             (enabled, default_warehouse_id or None),
         )
+        conn.execute(
+            """UPDATE system_modules
+               SET is_enabled = ?, updated_at = CURRENT_TIMESTAMP,
+                   updated_by = 'Inventory Settings'
+               WHERE module_key = 'inventory' AND is_core = 0""",
+            (enabled,),
+        )
         conn.commit(); conn.close()
         return redirect(url_for("inventory_settings"))
     settings = conn.execute("SELECT * FROM erp_settings WHERE id = 1").fetchone()
@@ -9289,6 +9330,35 @@ def settings_home():
         inventory_setting=erp_setting,
         po_print_setting=erp_setting,
         numbering_count=numbering_count,
+    )
+
+
+@app.route("/settings/modules", methods=["GET", "POST"])
+def module_manager_settings():
+    conn = get_connection()
+    if request.method == "POST":
+        try:
+            update_optional_modules(
+                conn,
+                request.form.getlist("enabled_modules"),
+                actor=request.form.get("updated_by", "Admin"),
+            )
+            conn.commit()
+        except (ModuleManagerError, sqlite3.Error) as error:
+            conn.rollback()
+            conn.close()
+            return f"Gagal memperbarui Module Manager: {error}", 400
+        conn.close()
+        return redirect(url_for("module_manager_settings"))
+
+    states = get_module_states(conn)
+    conn.close()
+    core_modules = [row for row in states.values() if row["is_core"]]
+    optional_modules = [row for row in states.values() if not row["is_core"]]
+    return render_template(
+        "module_manager.html",
+        core_modules=core_modules,
+        optional_modules=optional_modules,
     )
 
 
