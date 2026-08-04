@@ -1472,7 +1472,7 @@ def api_product_search():
 def dashboard():
     conn = get_connection()
     try:
-        dashboard_data = build_executive_dashboard(conn, request.args)
+        dashboard_data = build_executive_dashboard(conn, request.args, atca=True)
     finally:
         conn.close()
     return render_template(
