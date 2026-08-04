@@ -26,12 +26,15 @@
         .date-fields { display:contents; }
         .context { color:var(--muted); font-size:13px; margin:11px 0 0; }
         .section-head { margin:28px 0 12px; }
+        .quick-actions { display:flex; gap:9px; flex-wrap:wrap; margin:0 0 22px; }
+        .quick-actions .button { padding:9px 13px; }
         .section-head h2 { margin:0; font-size:20px; }
         .section-head span { color:var(--muted); font-size:13px; }
         .kpi-grid { display:grid; grid-template-columns:repeat(7,minmax(145px,1fr)); gap:11px; }
         .kpi { padding:15px; min-height:105px; position:relative; overflow:hidden; }
         .kpi:after { content:""; width:45px; height:45px; border-radius:50%; background:var(--soft); position:absolute; right:-13px; top:-13px; }
         .kpi small { display:block; min-height:30px; color:var(--muted); font-size:12px; font-weight:700; }
+        .definition { cursor:help; border-bottom:1px dotted currentColor; }
         .kpi strong { display:block; font-size:clamp(18px,2vw,24px); margin-top:8px; color:var(--brand); overflow-wrap:anywhere; }
         .grid-2 { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
         .grid-3 { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
@@ -55,9 +58,14 @@
         .stage small { display:block; color:var(--muted); margin:4px 0; }
         .badge { display:inline-flex; padding:4px 8px; border-radius:999px; font-size:10px; font-weight:800; background:var(--soft); color:var(--brand); }
         .badge.danger { background:#fee4e2; color:var(--danger); }
+        .badge.critical { background:#fee4e2; color:var(--danger); }
+        .badge.warning { background:#fff0c7; color:var(--warn); }
+        .badge.info { background:#eaf2f8; color:var(--brand2); }
+        .badge.safe { background:#dcfae6; color:var(--good); }
         .alert-count { background:#fee4e2; color:var(--danger); border-radius:999px; padding:4px 9px; font-size:12px; font-weight:800; }
         .activity { list-style:none; padding:0; margin:0; }
-        .activity li { padding:10px 0; border-bottom:1px solid var(--line); display:grid; grid-template-columns:125px 1fr auto; gap:10px; align-items:start; }
+        .activity li { padding:12px 0 12px 18px; border-left:2px solid var(--line); border-bottom:1px solid var(--line); display:grid; grid-template-columns:125px 1fr auto; gap:10px; align-items:start; position:relative; }
+        .activity li:before { content:""; position:absolute; width:9px; height:9px; border-radius:50%; background:var(--brand2); left:-6px; top:17px; }
         .activity p { margin:2px 0; font-size:12px; }
         .activity time { color:var(--muted); font-size:10px; white-space:nowrap; }
         .rank { display:flex; gap:10px; align-items:center; padding:9px 0; border-bottom:1px solid var(--line); }
@@ -97,9 +105,17 @@
         <p class="context">Data operasional {{ d.filters.start_date }} s.d. {{ d.filters.end_date }}. KPI Hari/Bulan/Tahun selalu memakai kalender berjalan dan tetap mengikuti filter dimensi.</p>
     </form>
 
+    <div class="quick-actions" aria-label="Quick Action">
+        <a class="button" href="/quotations/add">Buat Quotation</a>
+        <a class="button" href="/customers">Tambah Customer</a>
+        <a class="button" href="{% if d.filters.customer_id %}/customers/{{ d.filters.customer_id }}#historical-form{% else %}/customers{% endif %}" title="Pilih customer lalu buka form riwayat pembelian">Tambah Historical Purchase</a>
+        <a class="button" href="/transactions/add">Buat Transaction</a>
+        <a class="button" href="/purchase-orders/add">Buat PO</a>
+    </div>
+
     <div class="section-head"><h2>Executive KPI</h2><span>Ringkasan keputusan utama</span></div>
-    {% set cards=[('Omzet Hari Ini',format_rupiah(d.kpis.revenue_today)),('Omzet Bulan Ini',format_rupiah(d.kpis.revenue_month)),('Omzet Tahun Ini',format_rupiah(d.kpis.revenue_year)),('Margin Bulan Ini',format_rupiah(d.kpis.margin_month)),('Laba Bersih Bulan Ini',format_rupiah(d.kpis.net_profit_month)),('Customer Baru',d.kpis.new_customer),('Repeat Customer',d.kpis.repeat_customer),('Quotation Aktif',d.kpis.active_quotation),('Quotation Deal',d.kpis.deal_quotation),('Invoice Outstanding',d.kpis.outstanding_invoice),('Total Piutang',format_rupiah(d.kpis.receivable)),('Purchase Outstanding',d.kpis.purchase_outstanding),('Stock Value',format_rupiah(d.kpis.stock_value)),('Stock Hampir Habis',d.kpis.low_stock)] %}
-    <section class="kpi-grid">{% for label,value in cards %}<article class="kpi"><small>{{ label }}</small><strong>{{ value }}</strong></article>{% endfor %}</section>
+    {% set cards=[('Omzet Hari Ini',format_rupiah(d.kpis.revenue_today),'Transaction + Historical Purchase berharga pada hari kalender ini.'),('Omzet Bulan Ini',format_rupiah(d.kpis.revenue_month),'Transaction + Historical Purchase berharga pada bulan kalender ini.'),('Omzet Tahun Ini',format_rupiah(d.kpis.revenue_year),'Omzet kalender tahun berjalan; tetap mengikuti filter dimensi.'),('Margin Bulan Ini',format_rupiah(d.kpis.margin_month),'Margin transaction resmi; Historical Purchase tidak memiliki margin.'),('Laba Bersih Bulan Ini',format_rupiah(d.kpis.net_profit_month),'Laba bersih transaction resmi.'),('Customer Baru Periode Ini',d.kpis.new_customer,'Customer dengan created_at dalam rentang filter.'),('Repeat Customer',d.kpis.repeat_customer,'Customer dengan lebih dari satu order gabungan.'),('Quotation Aktif',d.kpis.active_quotation,'Quotation berstatus aktif pada periode.'),('Quotation Deal',d.kpis.deal_quotation,'Quotation deal pada periode.'),('Invoice Outstanding',d.kpis.outstanding_invoice,'Invoice belum lunas.'),('Total Piutang',format_rupiah(d.kpis.receivable),'Sisa invoice setelah receipt non-Void.'),('Purchase Outstanding',d.kpis.purchase_outstanding,'PO yang masih terbuka.'),('Stock Value',format_rupiah(d.kpis.stock_value),'Stok saat ini × harga modal default.'),('Stock Hampir Habis',d.kpis.low_stock,'Produk dengan stok ≤ minimum.') ] %}
+    <section class="kpi-grid">{% for label,value,help in cards %}<article class="kpi"><small><span class="definition" title="{{ help }}">{{ label }}</span></small><strong>{{ value }}</strong></article>{% endfor %}</section>
 
     <div class="section-head"><h2>Business Trend</h2><span>12 bulan terakhir</span></div>
     <section class="grid-2"><article class="panel"><h3>Omzet, Margin & Laba Bersih</h3><div class="chart"><canvas id="trendChart"></canvas></div></article><article class="panel"><h3>Sales Funnel</h3><div class="chart"><canvas id="funnelChart"></canvas></div></article></section>
@@ -109,8 +125,8 @@
 
     <div class="section-head"><h2>Customer Analytics</h2><span>Nilai dan retensi customer</span></div>
     <section class="grid-2">
-        <article class="panel"><div class="mini-grid">{% set cm=[('Customer Baru',d.customer.new),('Existing',d.customer.existing),('Repeat',d.customer.repeat),('Platinum',d.customer.platinum),('Gold',d.customer.gold),('Tidak Aktif',d.customer.inactive),('Lama Tidak Order',d.customer.stale|length),('Outstanding',d.customer.outstanding|length)] %}{% for label,value in cm %}<div class="mini"><small>{{ label }}</small><strong>{{ value }}</strong></div>{% endfor %}</div><h3>Top Customer</h3><div class="table-wrap"><table><thead><tr><th>Customer</th><th>Transaksi</th><th>Omzet</th><th>Margin</th><th>Order Terakhir</th></tr></thead><tbody>{% for row in d.customer.top %}<tr><td><a href="/customers/{{ row.id }}">{{ row.nama }}</a><br><small>{{ row.instansi or '-' }}</small></td><td>{{ row.transaction_count }}</td><td class="money">{{ format_rupiah(row.revenue) }}</td><td class="money">{{ format_rupiah(row.margin) }}</td><td>{{ row.last_order }}</td></tr>{% else %}<tr><td class="empty" colspan="5">Belum ada transaksi customer.</td></tr>{% endfor %}</tbody></table></div></article>
-        <article class="panel"><h3>Customer Outstanding</h3><div class="table-wrap"><table><thead><tr><th>Customer</th><th>Invoice</th><th>Piutang</th></tr></thead><tbody>{% for row in d.customer.outstanding %}<tr><td><a href="/customers/{{ row.id }}">{{ row.nama }}</a></td><td>{{ row.invoice_count }}</td><td class="money">{{ format_rupiah(row.outstanding) }}</td></tr>{% else %}<tr><td class="empty" colspan="3">Tidak ada outstanding.</td></tr>{% endfor %}</tbody></table></div><h3 style="margin-top:22px">Lama Tidak Order</h3><div class="table-wrap"><table><thead><tr><th>Customer</th><th>Order Terakhir</th><th>Hari</th></tr></thead><tbody>{% for row in d.customer.stale %}<tr><td><a href="/customers/{{ row.id }}">{{ row.nama }}</a></td><td>{{ row.last_order or 'Belum pernah' }}</td><td>{{ row.inactive_days if row.inactive_days is not none else '-' }}</td></tr>{% else %}<tr><td class="empty" colspan="3">Tidak ada customer stale.</td></tr>{% endfor %}</tbody></table></div></article>
+        <article class="panel"><div class="mini-grid">{% set cm=[('Customer Database',d.customer.database),('Customer Baru Periode Ini',d.customer.new),('Existing Customer',d.customer.existing),('Prospek',d.customer.prospect),('Repeat',d.customer.repeat),('Tidak Aktif',d.customer.inactive),('Lama Tidak Order',d.customer.stale_count),('Belum Pernah Order',d.customer.never_order_count)] %}{% for label,value in cm %}<div class="mini"><small>{{ label }}</small><strong>{{ value }}</strong></div>{% endfor %}</div><h3>Top Customer</h3><div class="table-wrap"><table><thead><tr><th>Customer</th><th>Order</th><th>Omzet</th><th>Margin</th><th>Order Terakhir</th></tr></thead><tbody>{% for row in d.customer.top %}<tr><td><a href="/customers/{{ row.id }}">{{ row.nama }}</a><br><small>{{ row.instansi or '-' }}</small></td><td>{{ row.transaction_count }}</td><td class="money">{{ format_rupiah(row.revenue) }}</td><td class="money">{{ format_rupiah(row.margin) }}</td><td>{{ row.last_order }}</td></tr>{% else %}<tr><td class="empty" colspan="5">Belum ada transaksi pada periode ini.</td></tr>{% endfor %}</tbody></table></div></article>
+        <article class="panel"><h3>Customer Outstanding</h3><div class="table-wrap"><table><thead><tr><th>Customer</th><th>Invoice</th><th>Piutang</th></tr></thead><tbody>{% for row in d.customer.outstanding %}<tr><td><a href="/customers/{{ row.id }}">{{ row.nama }}</a></td><td>{{ row.invoice_count }}</td><td class="money">{{ format_rupiah(row.outstanding) }}</td></tr>{% else %}<tr><td class="empty" colspan="3">Belum ada piutang.</td></tr>{% endfor %}</tbody></table></div><h3 style="margin-top:22px">Lama Tidak Order</h3><div class="table-wrap"><table><thead><tr><th>Customer</th><th>Order Terakhir</th><th>Hari</th></tr></thead><tbody>{% for row in d.customer.stale %}<tr><td><a href="/customers/{{ row.id }}">{{ row.nama }}</a></td><td>{{ row.last_order }}</td><td>{{ row.inactive_days }}</td></tr>{% else %}<tr><td class="empty" colspan="3">Tidak ada customer lama tidak order.</td></tr>{% endfor %}</tbody></table></div><h3 style="margin-top:22px">Belum Pernah Order</h3>{% for row in d.customer.never_order[:5] %}<div class="rank"><b>–</b><div><strong>{{ row.nama }}</strong><small>{{ row.instansi or '-' }}</small></div></div>{% else %}<p class="empty">Semua customer aktif pernah order.</p>{% endfor %}</article>
     </section>
 
     <div class="section-head"><h2>Product Analytics</h2><span>Demand, margin, dan kategori</span></div>
@@ -120,7 +136,7 @@
         <article class="panel"><h3>Penjualan per Kategori</h3><div class="chart"><canvas id="categoryChart"></canvas></div></article>
     </section>
 
-    <div class="section-head"><h2>Sales Funnel</h2><span>Conversion rate terhadap tahap sebelumnya</span></div>
+    <div class="section-head"><h2>Sales Funnel</h2><span title="Historical Purchase tidak termasuk karena bukan workflow operasional.">Workflow operasional periode ini · Historical Purchase dikecualikan</span></div>
     <section class="panel"><div class="funnel">{% for row in d.funnel %}<div class="stage"><strong>{{ row.count }}</strong><small>{{ row.stage }}</small><b>{{ row.conversion_rate }}%</b></div>{% endfor %}</div></section>
 
     <div class="section-head"><h2>Financial, Purchase & Inventory</h2><span>Kontrol nilai dan operasi</span></div>
@@ -130,15 +146,15 @@
         <article class="panel"><h3>Inventory</h3><div class="mini-grid"><div class="mini"><small>Stock Masuk</small><strong>{{ d.inventory.stock_in }}</strong></div><div class="mini"><small>Stock Keluar</small><strong>{{ d.inventory.stock_out }}</strong></div><div class="mini"><small>Available</small><strong>{{ d.inventory.available }}</strong></div><div class="mini"><small>Hampir Habis</small><strong>{{ d.inventory.low_stock }}</strong></div></div><h3>Fast Moving</h3>{% for row in d.inventory.fast_moving %}<div class="rank"><b>{{ loop.index }}</b><div><strong>{{ row.nama_produk }}</strong><small>{{ row.quantity }} unit keluar</small></div></div>{% else %}<p class="empty">Belum ada stock keluar.</p>{% endfor %}</article>
     </section>
 
-    <div class="section-head"><h2>Owner Alert</h2><span class="alert-count">{{ d.alerts.total }} alert</span></div>
+    <div class="section-head"><h2>Owner Alert</h2><span><span class="badge {{ d.alerts.level|lower }}">{{ d.alerts.level }}</span> <span class="alert-count">{{ d.alerts.total }} alert</span></span></div>
     <section class="grid-3">
-        <article class="panel"><h3>Invoice Jatuh Tempo</h3>{% for row in d.alerts.overdue_invoice %}<div class="rank"><b>!</b><div><strong>{{ row.reference }} · {{ row.subject or '-' }}</strong><small>{{ row.due_date }} · {{ format_rupiah(row.amount) }}</small></div></div>{% else %}<p class="empty">Tidak ada invoice overdue.</p>{% endfor %}</article>
-        <article class="panel"><h3>Stock Hampir Habis</h3>{% for row in d.alerts.low_stock %}<div class="rank"><b>!</b><div><strong>{{ row.subject }}</strong><small>{{ row.reference or '-' }} · stock {{ row.stock }} / minimum {{ row.minimum_stock }}</small></div></div>{% else %}<p class="empty">Stock aman.</p>{% endfor %}</article>
-        <article class="panel"><h3>PO Terlambat & Quotation Expired</h3>{% for row in d.alerts.late_po %}<div class="rank"><b>PO</b><div><strong>{{ row.reference }} · {{ row.subject }}</strong><small>Estimasi {{ row.due_date }}</small></div></div>{% endfor %}{% for row in d.alerts.expired_quotation %}<div class="rank"><b>QT</b><div><strong>{{ row.reference }} · {{ row.subject }}</strong><small>Expired {{ row.due_date }}</small></div></div>{% endfor %}{% if not d.alerts.late_po and not d.alerts.expired_quotation %}<p class="empty">Tidak ada PO terlambat atau quotation expired.</p>{% endif %}</article>
+        <article class="panel"><h3>Invoice Jatuh Tempo <span class="badge critical">Critical</span></h3>{% for row in d.alerts.overdue_invoice %}<div class="rank"><b>!</b><div><strong>{{ row.reference }} · {{ row.subject or '-' }}</strong><small>{{ row.due_date }} · {{ format_rupiah(row.amount) }}</small></div></div>{% else %}<p class="empty">Tidak ada invoice overdue.</p>{% endfor %}</article>
+        <article class="panel"><h3>Stock Hampir Habis <span class="badge warning">Warning</span></h3>{% for row in d.alerts.low_stock %}<div class="rank"><b>!</b><div><strong>{{ row.subject }}</strong><small>{{ row.reference or '-' }} · stock {{ row.stock }} / minimum {{ row.minimum_stock }}</small></div></div>{% else %}<p class="empty">Stock aman.</p>{% endfor %}</article>
+        <article class="panel"><h3>PO Terlambat <span class="badge warning">Warning</span> · Quotation Expired <span class="badge info">Info</span></h3>{% for row in d.alerts.late_po %}<div class="rank"><b>PO</b><div><strong>{{ row.reference }} · {{ row.subject }}</strong><small>Estimasi {{ row.due_date }}</small></div></div>{% endfor %}{% for row in d.alerts.expired_quotation %}<div class="rank"><b>QT</b><div><strong>{{ row.reference }} · {{ row.subject }}</strong><small>Expired {{ row.due_date }}</small></div></div>{% endfor %}{% if not d.alerts.late_po and not d.alerts.expired_quotation %}<p class="empty">Tidak ada PO terlambat atau quotation expired.</p>{% endif %}</article>
     </section>
 
     <div class="section-head"><h2>Recent Activity</h2><span>Workflow Events · termasuk revision & cancellation</span></div>
-    <section class="panel"><ul class="activity">{% for row in d.recent_activity %}<li><span class="badge {% if 'CANCEL' in row.event_type %}danger{% endif %}">{{ row.document_type }} · {{ row.event_type }}</span><div><p><strong>{{ row.customer_name or 'Tanpa Customer' }}</strong> — {{ row.description }}</p><p>{{ row.old_status or '-' }} → {{ row.new_status or '-' }} · oleh {{ row.created_by or 'System' }}</p></div><time>{{ row.created_at }}</time></li>{% else %}<li class="empty">Belum ada workflow event pada periode ini.</li>{% endfor %}</ul></section>
+    <section class="panel"><ul class="activity">{% for row in d.recent_activity %}<li><span class="badge {% if 'CANCEL' in row.event_type %}danger{% endif %}">{{ row.document_type }} · {{ row.event_type }}</span><div><p><strong>{{ row.customer_name or 'Tanpa Customer' }}</strong> — {{ row.description }}</p><p>{{ row.old_status or '-' }} → {{ row.new_status or '-' }} · oleh {{ row.created_by or 'System' }}</p></div><time>{{ row.created_at }}</time></li>{% else %}<li class="empty">Belum ada aktivitas sales.</li>{% endfor %}</ul></section>
     <footer>Dashboard hanya membaca data ERP existing. Tidak membuat atau mengubah transaksi.</footer>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>

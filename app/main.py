@@ -38,6 +38,13 @@ from product_import import (
     parse_product_workbook,
     summarize_rows,
 )
+from test_transaction_purge import (
+    TestTransactionPurgeError,
+    can_mark_test_transaction,
+    can_purge_test_transaction,
+    mark_test_transaction,
+    purge_test_transaction,
+)
 from quotation_master import (
     customer_search_result,
     customer_snapshot,
@@ -2475,6 +2482,11 @@ def add_transaction():
             "",
         ).strip()
 
+        is_test = 1 if request.form.get("is_test") == "1" else 0
+        test_label = request.form.get("test_label", "").strip() or None
+        if not is_test:
+            test_label = None
+
         biaya_lain_raw = request.form.get(
             "biaya_lain",
             "0",
@@ -2721,11 +2733,13 @@ def add_transaction():
                     biaya_lain,
                     keterangan_biaya,
                     laba_bersih,
-                    catatan
+                    catatan,
+                    is_test,
+                    test_label
                 )
                 VALUES (
                     ?, ?, ?, ?, ?, ?, ?, ?,
-                    ?, ?, ?, ?, ?, ?, ?, ?
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
                 )
                 """,
                 (
@@ -2745,6 +2759,8 @@ def add_transaction():
                     keterangan_biaya,
                     laba_bersih,
                     catatan,
+                    is_test,
+                    test_label,
                 ),
             )
 
@@ -3371,6 +3387,8 @@ def transaction_detail(transaction_id):
         ).fetchone()
 
     workflow_revision = transaction_revision_context(conn, transaction_id)
+    purge_eligibility = can_purge_test_transaction(conn, transaction_id)
+    mark_test_eligibility = can_mark_test_transaction(conn, transaction_id)
 
     conn.close()
 
@@ -3384,7 +3402,52 @@ def transaction_detail(transaction_id):
         invoice_payment_statuses=INVOICE_PAYMENT_STATUSES,
         identity=transaction_identity,
         workflow_revision=workflow_revision,
+        purge_eligibility=purge_eligibility,
+        mark_test_eligibility=mark_test_eligibility,
+        format_rupiah=format_rupiah,
     )
+
+
+@app.route(
+    "/transactions/<int:transaction_id>/mark-test",
+    methods=["POST"],
+)
+def mark_transaction_as_test(transaction_id):
+    conn = get_connection()
+    try:
+        mark_test_transaction(
+            conn,
+            transaction_id,
+            reason=request.form.get("reason", ""),
+        )
+    except (TestTransactionPurgeError, sqlite3.Error) as error:
+        conn.rollback()
+        conn.close()
+        return str(error), 400
+    conn.close()
+    return redirect(url_for("transaction_detail", transaction_id=transaction_id))
+
+
+@app.route(
+    "/transactions/<int:transaction_id>/purge-test",
+    methods=["POST"],
+)
+def purge_transaction_test(transaction_id):
+    conn = get_connection()
+    try:
+        purge_test_transaction(
+            conn,
+            transaction_id,
+            reason=request.form.get("reason", ""),
+            confirmation_number=request.form.get("confirmation_number", ""),
+            actor=request.form.get("purged_by", "").strip() or "Sistem",
+        )
+    except (TestTransactionPurgeError, sqlite3.Error) as error:
+        conn.rollback()
+        conn.close()
+        return str(error), 400
+    conn.close()
+    return redirect(url_for("transactions"))
 
 
 @app.route(

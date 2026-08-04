@@ -800,6 +800,8 @@ def create_tables():
             catatan TEXT,
 
             source_quotation_id INTEGER,
+            is_test INTEGER NOT NULL DEFAULT 0 CHECK (is_test IN (0, 1)),
+            test_label TEXT,
 
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -945,6 +947,40 @@ def create_tables():
         "sales_transactions",
         "source_quotation_id",
         "INTEGER",
+    )
+
+    # Sprint 13.5 — explicit test marker. Existing rows remain non-test.
+    ensure_column(
+        conn,
+        "sales_transactions",
+        "is_test",
+        "INTEGER NOT NULL DEFAULT 0 CHECK (is_test IN (0, 1))",
+    )
+    ensure_column(conn, "sales_transactions", "test_label", "TEXT")
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS test_transaction_purge_audit (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            transaction_id_snapshot INTEGER NOT NULL,
+            nomor_transaction_snapshot TEXT NOT NULL,
+            customer_id INTEGER,
+            customer_name_snapshot TEXT,
+            tanggal_snapshot TEXT,
+            total_penjualan_snapshot INTEGER NOT NULL DEFAULT 0,
+            total_modal_snapshot INTEGER NOT NULL DEFAULT 0,
+            margin_snapshot INTEGER NOT NULL DEFAULT 0,
+            status_snapshot TEXT,
+            reason TEXT NOT NULL,
+            purged_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            purged_by TEXT NOT NULL,
+            payload_json TEXT NOT NULL
+        )
+        """
+    )
+    cursor.execute(
+        """CREATE INDEX IF NOT EXISTS idx_test_transaction_purge_audit_transaction
+           ON test_transaction_purge_audit(transaction_id_snapshot, purged_at)"""
     )
 
 

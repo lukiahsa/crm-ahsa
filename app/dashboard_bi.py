@@ -109,6 +109,53 @@ def _transaction_where(filters, start=None, end=None, alias="t"):
     return " AND ".join(conditions), params
 
 
+def _historical_where(filters, start=None, end=None, alias="h"):
+    """Build the isolated historical-purchase predicate.
+
+    Historical purchases intentionally have no sales owner.  A sales dimension
+    therefore excludes them instead of attributing them to an arbitrary user.
+    """
+    conditions = [f"{alias}.active = 1", f"COALESCE({alias}.qty, 0) > 0"]
+    params = []
+    if start:
+        conditions.append(f"date({alias}.tanggal_pembelian) >= date(?)")
+        params.append(start)
+    if end:
+        conditions.append(f"date({alias}.tanggal_pembelian) <= date(?)")
+        params.append(end)
+    if filters["sales"]:
+        conditions.append("0 = 1")
+    if filters["customer_id"]:
+        conditions.append(f"{alias}.customer_id = ?")
+        params.append(filters["customer_id"])
+    if filters["product_id"]:
+        conditions.append(f"{alias}.product_id = ?")
+        params.append(filters["product_id"])
+    if filters["category_id"]:
+        conditions.append(
+            f"EXISTS (SELECT 1 FROM products hp WHERE hp.id = {alias}.product_id "
+            "AND hp.category_id = ?)"
+        )
+        params.append(filters["category_id"])
+    return " AND ".join(conditions), params
+
+
+def _historical_revenue(alias="h"):
+    return (
+        f"CASE WHEN {alias}.total IS NOT NULL AND {alias}.total >= 0 THEN {alias}.total "
+        f"WHEN {alias}.harga_satuan IS NOT NULL AND {alias}.harga_satuan >= 0 "
+        f"THEN {alias}.harga_satuan * {alias}.qty ELSE 0 END"
+    )
+
+
+def _historical_is_priced(alias="h"):
+    return (
+        f"CASE WHEN ({alias}.total IS NOT NULL AND {alias}.total >= 0) "
+        f"OR ({alias}.harga_satuan IS NOT NULL AND {alias}.harga_satuan >= 0) "
+        "THEN 1 ELSE 0 END"
+    )
+
+
 def _quotation_where(filters, start=None, end=None, alias="q"):
     conditions, params = [], []
     if start:
@@ -149,23 +196,40 @@ def _rows(conn, sql, params=()):
 
 def _money_summary(conn, filters, start, end):
     where, params = _transaction_where(filters, start, end)
+    historical_where, historical_params = _historical_where(filters, start, end)
     row = conn.execute(
         f"""
-        SELECT COUNT(*) AS transactions,
-               COALESCE(SUM(t.total_penjualan), 0) AS revenue,
-               COALESCE(SUM(t.margin), 0) AS margin,
-               COALESCE(SUM(t.laba_bersih), 0) AS net_profit,
-               COALESCE(AVG(t.total_penjualan), 0) AS average_transaction
-        FROM sales_transactions t
-        WHERE {where}
+        WITH orders AS (
+            SELECT 1 AS order_count, 1 AS valued_order,
+                   COALESCE(t.total_penjualan, 0) AS revenue,
+                   COALESCE(t.margin, 0) AS margin,
+                   COALESCE(t.laba_bersih, 0) AS net_profit
+            FROM sales_transactions t WHERE {where}
+            UNION ALL
+            SELECT 1, {_historical_is_priced('h')}, {_historical_revenue('h')}, 0, 0
+            FROM customer_purchase_history h WHERE {historical_where}
+        )
+        SELECT COALESCE(SUM(order_count), 0) AS transactions,
+               COALESCE(SUM(revenue), 0) AS revenue,
+               COALESCE(SUM(margin), 0) AS margin,
+               COALESCE(SUM(net_profit), 0) AS net_profit,
+               CASE WHEN COALESCE(SUM(valued_order), 0) = 0 THEN 0
+                    ELSE CAST(SUM(revenue) / SUM(valued_order) AS INTEGER) END AS average_transaction
+        FROM orders
         """,
-        tuple(params),
+        tuple(params + historical_params),
     ).fetchone()
     return {key: int(row[key] or 0) for key in row.keys()}
 
 
 def _invoice_summary(conn, filters, start, end):
-    where, params = _transaction_where(filters, start, end)
+    where, params = _transaction_where(filters)
+    invoice_conditions = [
+        "date(i.tanggal_invoice) >= date(?)",
+        "date(i.tanggal_invoice) <= date(?)",
+        where,
+    ]
+    invoice_params = [start, end] + params
     row = conn.execute(
         f"""
         WITH paid AS (
@@ -182,9 +246,9 @@ def _invoice_summary(conn, filters, start, end):
         FROM sales_invoices i
         JOIN sales_transactions t ON t.id = i.transaction_id
         LEFT JOIN paid ON paid.invoice_id = i.id
-        WHERE {where}
+        WHERE {' AND '.join(invoice_conditions)}
         """,
-        tuple(params),
+        tuple(invoice_params),
     ).fetchone()
     return {
         "outstanding_count": int(row["outstanding_count"] or 0),
@@ -214,12 +278,22 @@ def _executive_kpis(conn, filters):
     transaction_where, transaction_params = _transaction_where(
         filters, filters["start_date"], filters["end_date"]
     )
+    history_where, history_params = _historical_where(
+        filters, filters["start_date"], filters["end_date"]
+    )
     repeat_customer = _scalar(
         conn,
-        f"SELECT COUNT(*) FROM (SELECT t.customer_id FROM sales_transactions t "
-        f"WHERE {transaction_where} AND t.customer_id IS NOT NULL "
-        "GROUP BY t.customer_id HAVING COUNT(*) > 1)",
-        transaction_params,
+        f"""WITH orders AS (
+                SELECT t.customer_id FROM sales_transactions t
+                WHERE {transaction_where} AND t.customer_id IS NOT NULL
+                UNION ALL
+                SELECT h.customer_id FROM customer_purchase_history h
+                WHERE {history_where} AND h.customer_id IS NOT NULL
+            )
+            SELECT COUNT(*) FROM (
+                SELECT customer_id FROM orders GROUP BY customer_id HAVING COUNT(*) > 1
+            )""",
+        transaction_params + history_params,
     )
     customer_conditions = ["date(c.created_at) BETWEEN date(?) AND date(?)"]
     customer_params = [filters["start_date"], filters["end_date"]]
@@ -270,6 +344,7 @@ def _executive_kpis(conn, filters):
         "stock_value": int(stock_row["stock_value"] or 0),
         "low_stock": int(stock_row["low_stock"] or 0),
         "selected_revenue": selected["revenue"],
+        "average_purchase": selected["average_transaction"],
     }
 
 
@@ -322,78 +397,133 @@ def _sales_performance(conn, filters):
 
 def _customer_analytics(conn, filters):
     t_where, t_params = _transaction_where(filters, filters["start_date"], filters["end_date"])
+    h_where, h_params = _historical_where(filters, filters["start_date"], filters["end_date"])
     customer_filter = ""
     customer_filter_params = []
     if filters["customer_id"]:
         customer_filter = " AND c.id = ?"
         customer_filter_params.append(filters["customer_id"])
-    new_count = _scalar(
-        conn,
-        "SELECT COUNT(*) FROM customers c WHERE date(c.created_at) BETWEEN date(?) AND date(?)" + customer_filter,
-        [filters["start_date"], filters["end_date"]] + customer_filter_params,
-    )
-    existing_count = _scalar(
-        conn,
-        "SELECT COUNT(*) FROM customers c WHERE c.status_aktif = 1 "
-        "AND date(c.created_at) < date(?)" + customer_filter,
-        [filters["start_date"]] + customer_filter_params,
-    )
+    customer_counts = conn.execute(
+        """SELECT
+               SUM(CASE WHEN date(c.created_at) BETWEEN date(?) AND date(?) THEN 1 ELSE 0 END) AS new_count,
+               SUM(CASE WHEN c.status_aktif = 1 THEN 1 ELSE 0 END) AS database_count,
+               SUM(CASE WHEN c.status_aktif = 1 AND LOWER(TRIM(COALESCE(c.status, ''))) = 'prospek'
+                        THEN 1 ELSE 0 END) AS prospect_count,
+               SUM(CASE WHEN c.status_aktif = 1 AND LOWER(TRIM(COALESCE(c.status, '')))
+                        IN ('existing customer','existing') THEN 1 ELSE 0 END) AS existing_count,
+               SUM(CASE WHEN c.status_aktif = 0 THEN 1 ELSE 0 END) AS inactive_count
+           FROM customers c WHERE 1 = 1""" + customer_filter,
+        tuple([filters["start_date"], filters["end_date"]] + customer_filter_params),
+    ).fetchone()
     top = _rows(
         conn,
         f"""
-        SELECT c.id, c.nama, c.instansi, COUNT(t.id) AS transaction_count,
-               SUM(t.total_penjualan) AS revenue, SUM(t.margin) AS margin,
-               MAX(t.tanggal) AS last_order
-        FROM sales_transactions t JOIN customers c ON c.id = t.customer_id
-        WHERE {t_where}
+        WITH orders AS (
+            SELECT t.customer_id, 'T-' || t.id AS order_key, t.tanggal AS order_date,
+                   COALESCE(t.total_penjualan, 0) AS revenue, COALESCE(t.margin, 0) AS margin
+            FROM sales_transactions t WHERE {t_where} AND t.customer_id IS NOT NULL
+            UNION ALL
+            SELECT h.customer_id, 'H-' || h.id, h.tanggal_pembelian,
+                   {_historical_revenue('h')}, 0
+            FROM customer_purchase_history h WHERE {h_where} AND h.customer_id IS NOT NULL
+        )
+        SELECT c.id, c.nama, c.instansi, COUNT(DISTINCT orders.order_key) AS transaction_count,
+               SUM(orders.revenue) AS revenue, SUM(orders.margin) AS margin,
+               MAX(orders.order_date) AS last_order
+        FROM orders JOIN customers c ON c.id = orders.customer_id
         GROUP BY c.id, c.nama, c.instansi
         ORDER BY revenue DESC, c.nama COLLATE NOCASE LIMIT 10
         """,
-        t_params,
+        t_params + h_params,
     )
-    repeat_count = sum(1 for row in top if int(row["transaction_count"] or 0) > 1)
-    # Count all repeats, not only the displayed top ten.
     repeat_count = _scalar(
         conn,
-        f"SELECT COUNT(*) FROM (SELECT t.customer_id FROM sales_transactions t WHERE {t_where} "
-        "AND t.customer_id IS NOT NULL GROUP BY t.customer_id HAVING COUNT(*) > 1)",
-        t_params,
+        f"""WITH orders AS (
+                SELECT t.customer_id FROM sales_transactions t
+                WHERE {t_where} AND t.customer_id IS NOT NULL
+                UNION ALL
+                SELECT h.customer_id FROM customer_purchase_history h
+                WHERE {h_where} AND h.customer_id IS NOT NULL
+            )
+            SELECT COUNT(*) FROM (
+                SELECT customer_id FROM orders GROUP BY customer_id HAVING COUNT(*) > 1
+            )""",
+        t_params + h_params,
     )
     tier_row = conn.execute(
         f"""
+        WITH orders AS (
+            SELECT t.customer_id, COALESCE(t.total_penjualan, 0) AS revenue
+            FROM sales_transactions t WHERE {t_where} AND t.customer_id IS NOT NULL
+            UNION ALL
+            SELECT h.customer_id, {_historical_revenue('h')}
+            FROM customer_purchase_history h WHERE {h_where} AND h.customer_id IS NOT NULL
+        ), totals AS (
+            SELECT customer_id, SUM(revenue) AS revenue FROM orders GROUP BY customer_id
+        )
         SELECT SUM(CASE WHEN revenue > 200000000 THEN 1 ELSE 0 END) AS platinum,
-               SUM(CASE WHEN revenue > 75000000 AND revenue <= 200000000 THEN 1 ELSE 0 END) AS gold
-        FROM (SELECT t.customer_id, SUM(t.total_penjualan) AS revenue
-              FROM sales_transactions t WHERE {t_where} AND t.customer_id IS NOT NULL
-              GROUP BY t.customer_id)
+               SUM(CASE WHEN revenue > 50000000 AND revenue <= 200000000 THEN 1 ELSE 0 END) AS gold,
+               SUM(CASE WHEN revenue > 10000000 AND revenue <= 50000000 THEN 1 ELSE 0 END) AS silver,
+               SUM(CASE WHEN revenue <= 10000000 THEN 1 ELSE 0 END) AS bronze
+        FROM totals
         """,
-        tuple(t_params),
+        tuple(t_params + h_params),
     ).fetchone()
     stale_before = (_iso_date(filters["today"]) - timedelta(days=90)).isoformat()
     stale = _rows(
         conn,
         f"""
-        SELECT c.id, c.nama, c.instansi, MAX(t.tanggal) AS last_order,
-               CAST(julianday(?) - julianday(MAX(t.tanggal)) AS INTEGER) AS inactive_days
-        FROM customers c LEFT JOIN sales_transactions t ON t.customer_id = c.id
-          AND LOWER(COALESCE(t.status, '')) NOT IN ('batal', 'cancelled')
-        WHERE c.status_aktif = 1 {customer_filter}
-        GROUP BY c.id, c.nama, c.instansi
-        HAVING last_order IS NULL OR date(last_order) < date(?)
-        ORDER BY last_order IS NULL DESC, last_order ASC LIMIT 10
+        WITH all_orders AS (
+            SELECT t.customer_id, t.tanggal AS order_date FROM sales_transactions t
+            WHERE LOWER(COALESCE(t.status, '')) NOT IN ('batal', 'cancelled')
+            UNION ALL
+            SELECT h.customer_id, h.tanggal_pembelian FROM customer_purchase_history h
+            WHERE h.active = 1 AND COALESCE(h.qty, 0) > 0
+        ), last_orders AS (
+            SELECT customer_id, MAX(order_date) AS last_order FROM all_orders GROUP BY customer_id
+        )
+        SELECT c.id, c.nama, c.instansi, lo.last_order,
+               CAST(julianday(?) - julianday(lo.last_order) AS INTEGER) AS inactive_days,
+               COUNT(*) OVER() AS total_stale
+        FROM customers c JOIN last_orders lo ON lo.customer_id = c.id
+        WHERE c.status_aktif = 1 {customer_filter} AND date(lo.last_order) < date(?)
+        ORDER BY lo.last_order ASC LIMIT 10
         """,
         [filters["today"]] + customer_filter_params + [stale_before],
     )
+    never_order = _rows(
+        conn,
+        f"""SELECT c.id, c.nama, c.instansi, COUNT(*) OVER() AS total_never
+            FROM customers c
+            WHERE c.status_aktif = 1 {customer_filter}
+              AND NOT EXISTS (
+                  SELECT 1 FROM sales_transactions t WHERE t.customer_id = c.id
+                    AND LOWER(COALESCE(t.status, '')) NOT IN ('batal', 'cancelled')
+              )
+              AND NOT EXISTS (
+                  SELECT 1 FROM customer_purchase_history h WHERE h.customer_id = c.id
+                    AND h.active = 1 AND COALESCE(h.qty, 0) > 0
+              )
+            ORDER BY c.nama COLLATE NOCASE LIMIT 10""",
+        customer_filter_params,
+    )
     outstanding = _outstanding_customers(conn, filters)
     return {
-        "new": new_count,
-        "existing": existing_count,
+        "new": int(customer_counts["new_count"] or 0),
+        "existing": int(customer_counts["existing_count"] or 0),
+        "database": int(customer_counts["database_count"] or 0),
+        "prospect": int(customer_counts["prospect_count"] or 0),
         "repeat": repeat_count,
         "platinum": int(tier_row["platinum"] or 0),
         "gold": int(tier_row["gold"] or 0),
-        "inactive": _scalar(conn, "SELECT COUNT(*) FROM customers WHERE status_aktif = 0"),
+        "silver": int(tier_row["silver"] or 0),
+        "bronze": int(tier_row["bronze"] or 0),
+        "inactive": int(customer_counts["inactive_count"] or 0),
         "top": top,
         "stale": stale,
+        "stale_count": int(stale[0]["total_stale"] if stale else 0),
+        "never_order": never_order,
+        "never_order_count": int(never_order[0]["total_never"] if never_order else 0),
         "outstanding": outstanding,
     }
 
@@ -432,25 +562,53 @@ def _product_filter(filters, alias="p"):
 
 def _product_analytics(conn, filters):
     t_where, t_params = _transaction_where(filters, filters["start_date"], filters["end_date"])
+    h_where, h_params = _historical_where(filters, filters["start_date"], filters["end_date"])
     product_where, product_params = _product_filter(filters, "p")
     top = _rows(
         conn,
         f"""
-        SELECT p.id, p.kode_produk, p.nama_produk, COALESCE(pc.nama, sti.kategori_snapshot, '-') AS category,
-               SUM(sti.qty) AS quantity, SUM(sti.subtotal_penjualan) AS revenue,
-               SUM(sti.margin_item) AS margin, COUNT(DISTINCT t.id) AS transaction_count,
-               COUNT(DISTINCT t.customer_id) AS customer_count,
-               COUNT(DISTINCT CASE WHEN repeated.customer_id IS NOT NULL THEN t.customer_id END) AS repeat_customer
-        FROM sales_transaction_items sti JOIN sales_transactions t ON t.id = sti.transaction_id
-        JOIN products p ON p.id = sti.product_id LEFT JOIN product_categories pc ON pc.id = p.category_id
-        LEFT JOIN (SELECT customer_id FROM sales_transactions
-                   WHERE LOWER(COALESCE(status, '')) NOT IN ('batal', 'cancelled')
-                   GROUP BY customer_id HAVING COUNT(*) > 1) repeated ON repeated.customer_id = t.customer_id
-        WHERE {t_where} AND {product_where}
-        GROUP BY p.id, p.kode_produk, p.nama_produk, pc.nama, sti.kategori_snapshot
+        WITH product_orders AS (
+            SELECT COALESCE('ID-' || sti.product_id,
+                            'NAME-' || LOWER(sti.nama_produk_snapshot)) AS product_key,
+                   sti.product_id, COALESCE(p.kode_produk, sti.kode_produk_snapshot) AS kode_produk,
+                   COALESCE(p.nama_produk, sti.nama_produk_snapshot) AS nama_produk,
+                   COALESCE(pc.nama, sti.kategori_snapshot, 'Tanpa Kategori') AS category,
+                   sti.qty, COALESCE(sti.subtotal_penjualan, 0) AS revenue,
+                   COALESCE(sti.margin_item, 0) AS margin, t.customer_id,
+                   'T-' || t.id AS order_key, t.tanggal AS order_date
+            FROM sales_transaction_items sti JOIN sales_transactions t ON t.id = sti.transaction_id
+            LEFT JOIN products p ON p.id = sti.product_id
+            LEFT JOIN product_categories pc ON pc.id = p.category_id
+            WHERE {t_where} AND {product_where}
+            UNION ALL
+            SELECT COALESCE('ID-' || h.product_id,
+                            'NAME-' || LOWER(h.nama_produk_snapshot)),
+                   h.product_id, COALESCE(p.kode_produk, h.kode_produk_snapshot),
+                   COALESCE(p.nama_produk, h.nama_produk_snapshot),
+                   COALESCE(pc.nama, h.kategori_snapshot, 'Tanpa Kategori'),
+                   h.qty, {_historical_revenue('h')}, 0, h.customer_id,
+                   'H-' || h.id, h.tanggal_pembelian
+            FROM customer_purchase_history h
+            LEFT JOIN products p ON p.id = h.product_id
+            LEFT JOIN product_categories pc ON pc.id = p.category_id
+            WHERE {h_where} AND {product_where}
+        ), repeat_buyers AS (
+            SELECT product_key, customer_id FROM product_orders
+            WHERE customer_id IS NOT NULL
+            GROUP BY product_key, customer_id HAVING COUNT(DISTINCT order_key) > 1
+        )
+        SELECT po.product_id AS id, po.kode_produk, po.nama_produk, po.category,
+               SUM(po.qty) AS quantity, SUM(po.revenue) AS revenue,
+               SUM(po.margin) AS margin, COUNT(DISTINCT po.order_key) AS transaction_count,
+               COUNT(DISTINCT po.customer_id) AS customer_count,
+               COUNT(DISTINCT rb.customer_id) AS repeat_customer,
+               MAX(po.order_date) AS last_purchase
+        FROM product_orders po
+        LEFT JOIN repeat_buyers rb ON rb.product_key = po.product_key AND rb.customer_id = po.customer_id
+        GROUP BY po.product_key, po.product_id, po.kode_produk, po.nama_produk, po.category
         ORDER BY quantity DESC, revenue DESC LIMIT 10
         """,
-        t_params + product_params,
+        t_params + product_params + h_params + product_params,
     )
     highest_margin = sorted(top, key=lambda row: int(row["margin"] or 0), reverse=True)[:5]
     most_repeat = sorted(top, key=lambda row: int(row["repeat_customer"] or 0), reverse=True)[:5]
@@ -463,21 +621,36 @@ def _product_analytics(conn, filters):
                               JOIN sales_transactions t ON t.id = sti.transaction_id
                               WHERE sti.product_id = p.id
                                 AND LOWER(COALESCE(t.status, '')) NOT IN ('batal', 'cancelled'))
+              AND NOT EXISTS (SELECT 1 FROM customer_purchase_history h
+                              WHERE h.product_id = p.id AND h.active = 1
+                                AND COALESCE(h.qty, 0) > 0)
             ORDER BY p.nama_produk COLLATE NOCASE LIMIT 10""",
         product_params,
     )
     category = _rows(
         conn,
         f"""
-        SELECT COALESCE(pc.nama, sti.kategori_snapshot, 'Tanpa Kategori') AS category,
-               SUM(sti.qty) AS quantity, SUM(sti.subtotal_penjualan) AS revenue
-        FROM sales_transaction_items sti JOIN sales_transactions t ON t.id = sti.transaction_id
-        LEFT JOIN products p ON p.id = sti.product_id LEFT JOIN product_categories pc ON pc.id = p.category_id
-        WHERE {t_where} AND {product_where}
-        GROUP BY COALESCE(pc.nama, sti.kategori_snapshot, 'Tanpa Kategori')
+        WITH category_orders AS (
+            SELECT COALESCE(pc.nama, sti.kategori_snapshot, 'Tanpa Kategori') AS category,
+                   sti.qty, COALESCE(sti.subtotal_penjualan, 0) AS revenue
+            FROM sales_transaction_items sti JOIN sales_transactions t ON t.id = sti.transaction_id
+            LEFT JOIN products p ON p.id = sti.product_id
+            LEFT JOIN product_categories pc ON pc.id = p.category_id
+            WHERE {t_where} AND {product_where}
+            UNION ALL
+            SELECT COALESCE(pc.nama, h.kategori_snapshot, 'Tanpa Kategori'),
+                   h.qty, {_historical_revenue('h')}
+            FROM customer_purchase_history h
+            LEFT JOIN products p ON p.id = h.product_id
+            LEFT JOIN product_categories pc ON pc.id = p.category_id
+            WHERE {h_where} AND {product_where}
+        )
+        SELECT category, SUM(qty) AS quantity, SUM(revenue) AS revenue
+        FROM category_orders
+        GROUP BY category
         ORDER BY revenue DESC
         """,
-        t_params + product_params,
+        t_params + product_params + h_params + product_params,
     )
     return {
         "top": top,
@@ -492,23 +665,43 @@ def _product_analytics(conn, filters):
 def _sales_funnel(conn, filters):
     q_where, q_params = _quotation_where(filters, filters["start_date"], filters["end_date"])
     t_where, t_params = _transaction_where(filters, filters["start_date"], filters["end_date"])
-    customer_conditions = ["c.status IN ('Prospek', 'Follow Up', 'Penawaran')"]
-    customer_params = []
+    customer_conditions = [
+        "LOWER(TRIM(COALESCE(c.status, ''))) = 'prospek'",
+        "c.status_aktif = 1",
+        "date(c.created_at) BETWEEN date(?) AND date(?)",
+    ]
+    customer_params = [filters["start_date"], filters["end_date"]]
     if filters["customer_id"]:
         customer_conditions.append("c.id = ?")
         customer_params.append(filters["customer_id"])
     quotation_count = _scalar(conn, f"SELECT COUNT(*) FROM sales_quotations q WHERE {q_where}", q_params)
-    deal_count = _scalar(conn, f"SELECT COUNT(*) FROM sales_quotations q WHERE {q_where} AND q.status = 'Deal'", q_params)
+    deal_count = _scalar(
+        conn,
+        f"SELECT COUNT(*) FROM sales_quotations q WHERE {q_where} "
+        "AND LOWER(COALESCE(q.status, '')) IN ('deal', 'converted')",
+        q_params,
+    )
     transaction_count = _scalar(conn, f"SELECT COUNT(*) FROM sales_transactions t WHERE {t_where}", t_params)
     stages = [
         ("Prospek", _scalar(conn, f"SELECT COUNT(*) FROM customers c WHERE {' AND '.join(customer_conditions)}", customer_params)),
         ("Quotation", quotation_count),
         ("Deal", deal_count),
         ("Transaction", transaction_count),
-        ("Invoice", _document_transaction_count(conn, "sales_invoices", "transaction_id", "tanggal_invoice", filters, "1 = 1")),
+        ("Invoice", _document_transaction_count(
+            conn, "sales_invoices", "transaction_id", "tanggal_invoice", filters,
+            "LOWER(COALESCE(d.status_pembayaran, '')) NOT IN ('batal', 'cancelled')",
+        )),
         ("Receipt", _document_transaction_count(conn, "payment_receipts", "transaction_id", "tanggal", filters, "LOWER(COALESCE(d.status, '')) != 'void'")),
-        ("Delivery", _document_transaction_count(conn, "delivery_orders", "transaction_id", "tanggal", filters, "1 = 1")),
-        ("Completed", _scalar(conn, f"SELECT COUNT(*) FROM sales_transactions t WHERE {t_where} AND t.status = 'Selesai'", t_params)),
+        ("Delivery", _document_transaction_count(
+            conn, "delivery_orders", "transaction_id", "tanggal", filters,
+            "LOWER(COALESCE(d.status, '')) NOT IN ('batal', 'cancelled')",
+        )),
+        ("Completed", _scalar(
+            conn,
+            f"SELECT COUNT(*) FROM sales_transactions t WHERE {t_where} "
+            "AND LOWER(COALESCE(t.status, '')) IN ('selesai', 'completed')",
+            t_params,
+        )),
     ]
     result = []
     previous = None
@@ -679,13 +872,29 @@ def _owner_alerts(conn, filters):
         [filters["today"]] + list(ACTIVE_QUOTATION_STATUSES) + q_params,
     )
     stale = _customer_analytics_stale_alert(conn, filters)
+    for rows, level in (
+        (overdue, "Critical"),
+        (low_stock, "Warning"),
+        (late_po, "Warning"),
+        (expired, "Info"),
+        (stale, "Info"),
+    ):
+        for item in rows:
+            item["level"] = level
+    total = len(overdue) + len(stale) + len(low_stock) + len(late_po) + len(expired)
     return {
         "overdue_invoice": overdue,
         "stale_customer": stale,
         "low_stock": low_stock,
         "late_po": late_po,
         "expired_quotation": expired,
-        "total": len(overdue) + len(stale) + len(low_stock) + len(late_po) + len(expired),
+        "total": total,
+        "level": (
+            "Safe" if total == 0 else
+            "Critical" if overdue else
+            "Warning" if low_stock or late_po else
+            "Info"
+        ),
     }
 
 
@@ -698,12 +907,20 @@ def _customer_analytics_stale_alert(conn, filters):
         params.append(filters["customer_id"])
     return _rows(
         conn,
-        f"""SELECT c.id, c.nama AS subject, MAX(t.tanggal) AS last_order
-            FROM customers c LEFT JOIN sales_transactions t ON t.customer_id = c.id
-              AND LOWER(COALESCE(t.status, '')) NOT IN ('batal', 'cancelled')
-            WHERE {' AND '.join(conditions)} GROUP BY c.id, c.nama
-            HAVING last_order IS NULL OR date(last_order) < date(?)
-            ORDER BY last_order IS NULL DESC, last_order ASC LIMIT 10""",
+        f"""WITH all_orders AS (
+                SELECT t.customer_id, t.tanggal AS order_date FROM sales_transactions t
+                WHERE LOWER(COALESCE(t.status, '')) NOT IN ('batal', 'cancelled')
+                UNION ALL
+                SELECT h.customer_id, h.tanggal_pembelian FROM customer_purchase_history h
+                WHERE h.active = 1 AND COALESCE(h.qty, 0) > 0
+            ), last_orders AS (
+                SELECT customer_id, MAX(order_date) AS last_order
+                FROM all_orders GROUP BY customer_id
+            )
+            SELECT c.id, c.nama AS subject, lo.last_order
+            FROM customers c JOIN last_orders lo ON lo.customer_id = c.id
+            WHERE {' AND '.join(conditions)} AND date(lo.last_order) < date(?)
+            ORDER BY lo.last_order ASC LIMIT 10""",
         params + [stale_before],
     )
 
