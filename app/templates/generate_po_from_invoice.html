@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Generate PO dari Invoice</title>
+<title>Generate PO dari Transaction</title>
 <style>
 *{box-sizing:border-box}
 body{margin:0;background:#eef2f5;font-family:Arial,sans-serif;color:#17212b}
@@ -31,13 +31,13 @@ table{width:100%;border-collapse:collapse}th,td{padding:10px;border-bottom:1px s
 <div class="head">
 <div>
 <h1>🔄 Generate Purchase Order</h1>
-<div class="sub">Item dan harga modal disalin otomatis dari Invoice.</div>
+<div class="sub">Item dan harga modal disalin langsung dari Transaction.</div>
 </div>
 <a class="btn gray" href="{{ url_for('transaction_detail', transaction_id=transaction['id']) }}">Kembali ke Transaksi</a>
 </div>
 
 <section class="invoice-box">
-<div class="info"><small>Invoice</small><strong>{{ invoice["nomor_invoice"] }}</strong></div>
+<div class="info"><small>Invoice</small><strong>{{ invoice["nomor_invoice"] if invoice else "Tidak diperlukan" }}</strong></div>
 <div class="info"><small>Transaksi</small><strong>{{ transaction["nomor_transaksi"] }}</strong></div>
 <div class="info"><small>Customer</small><strong>{{ transaction["customer_nama"] or "-" }}</strong></div>
 <div class="info"><small>Total Modal</small><strong>{{ format_rupiah(transaction["total_modal"] or 0) }}</strong></div>
@@ -67,7 +67,7 @@ Purchase Order akan dibuat sebagai <strong>Draft</strong>. Setelah dibuat, Anda 
 <div><label>PPN</label><select name="ppn_persen">{% for ppn in ppn_options %}<option value="{{ ppn }}">{{ ppn }}%</option>{% endfor %}</select></div>
 <div><label>Ongkir</label><input type="number" min="0" name="ongkir" value="0"></div>
 <div><label>Biaya Lain</label><input type="number" min="0" name="biaya_lain" value="0"></div>
-<div class="full"><label>Catatan</label><textarea name="catatan">Dibuat otomatis dari {{ invoice["nomor_invoice"] }}.</textarea></div>
+<div class="full"><label>Catatan</label><textarea name="catatan">Dibuat otomatis dari Transaction {{ transaction["nomor_transaksi"] }}.</textarea></div>
 <div class="full"><label>Syarat & Ketentuan</label><textarea name="syarat_ketentuan">{{ default_terms }}</textarea></div>
 </div>
 </section>

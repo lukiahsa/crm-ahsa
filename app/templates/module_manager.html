@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Module Manager · ATCA</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#eef2f5;color:#17212b;font-family:Arial,sans-serif}.container{width:min(980px,calc(100% - 28px));margin:30px auto}.head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:18px}h1{margin:0;color:#0b4388}.sub{color:#687784;margin-top:7px;line-height:1.5}.btn{display:inline-block;border:0;border-radius:8px;padding:11px 16px;text-decoration:none;font-weight:800;cursor:pointer}.gray{background:#fff;border:1px solid #cad5dd;color:#17212b}.blue{background:#0b4388;color:#fff}.card{background:#fff;border:1px solid #e0e7ec;border-radius:12px;padding:20px;margin-bottom:16px;box-shadow:0 4px 18px rgba(20,40,60,.08)}.card h2{margin:0 0 5px;color:#0b4388}.note{margin:0 0 16px;color:#687784;font-size:13px}.module-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.module{display:flex;align-items:center;gap:12px;border:1px solid #dbe4ea;border-radius:9px;padding:13px;background:#f8fafc}.module input{width:19px;height:19px;accent-color:#0b4388}.module-name{font-weight:800}.module small{display:block;color:#687784;margin-top:3px}.locked{background:#eef7f1;border-color:#b9dcc5}.locked .tick{color:#087a37;font-weight:900;font-size:19px}.actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}.actor{max-width:280px;margin-left:auto;margin-top:18px}.actor label{display:block;font-size:12px;font-weight:800;margin-bottom:5px}.actor input{width:100%;padding:10px;border:1px solid #cad5dd;border-radius:7px}@media(max-width:680px){.module-grid{grid-template-columns:1fr}.head{flex-direction:column}}
+</style>
+</head>
+<body><main class="container">
+<div class="head"><div><h1>Module Manager</h1><div class="sub">ATCA menjaga modul inti selalu aktif. Modul opsional yang dimatikan tidak muncul di navigasi dan route-nya tidak dapat dijalankan.</div></div><a class="btn gray" href="{{ url_for('settings_home') }}">Kembali</a></div>
+<section class="card"><h2>Core Module</h2><p class="note">Pusat arsitektur transaction-first; status bersifat read-only.</p><div class="module-grid">
+{% for module in core_modules %}<div class="module locked"><span class="tick">✓</span><div><div class="module-name">{{ module.name }}</div><small>Selalu aktif</small></div></div>{% endfor %}
+</div></section>
+<form method="post"><section class="card"><h2>Optional Module</h2><p class="note">Perubahan berlaku segera untuk menu, route, tombol generate, dan workflow milik modul.</p><div class="module-grid">
+{% for module in optional_modules %}<label class="module"><input type="checkbox" name="enabled_modules" value="{{ module.key }}" {% if module.enabled %}checked{% endif %}><span><span class="module-name">{{ module.name }}</span><small>{% if module.enabled %}Aktif{% else %}Nonaktif{% endif %}</small></span></label>{% endfor %}
+</div><div class="actor"><label for="updated_by">Diubah oleh</label><input id="updated_by" name="updated_by" value="Admin" required></div><div class="actions"><a class="btn gray" href="{{ url_for('module_manager_settings') }}">Batalkan</a><button class="btn blue" type="submit">Simpan Module</button></div></section></form>
+</main></body></html>

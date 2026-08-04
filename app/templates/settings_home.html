@@ -31,6 +31,13 @@ h1{margin:0;color:#0b4388}.sub{margin-top:6px;color:#6d7882}
 
 <section class="grid">
 <article class="card">
+<div class="icon">🧩</div>
+<h2>Module Manager</h2>
+<p>Kelola modul opsional ATCA. Customer, Product, Transaction, Historical Purchase, Dashboard, dan Customer360 selalu aktif.</p>
+<span class="status">ATCA v1.0</span>
+<a class="open" href="{{ url_for('module_manager_settings') }}">Kelola Module</a>
+</article>
+<article class="card">
 <div class="icon">🏢</div>
 <h2>Company Identities</h2>
 <p>Kelola data profil Ahsa dan Denko. Capability dan scope identity dikunci oleh sistem.</p>
@@ -46,7 +53,7 @@ h1{margin:0;color:#0b4388}.sub{margin-top:6px;color:#6d7882}
 <a class="open" href="{{ url_for('numbering_settings') }}">Buka Pengaturan</a>
 </article>
 
-<article class="card">
+{% if module_enabled('inventory') %}<article class="card">
 <div class="icon">📦</div>
 <h2>Gudang Opsional</h2>
 <p>Aktifkan atau nonaktifkan fondasi inventory tanpa mengganggu modul penjualan.</p>
@@ -55,6 +62,7 @@ h1{margin:0;color:#0b4388}.sub{margin-top:6px;color:#6d7882}
 </span>
 <a class="open" href="{{ url_for('inventory_settings') }}">Buka Pengaturan</a>
 </article>
+{% endif %}
 </section>
 </main>
 </body>

@@ -36,7 +36,8 @@ def _dependency_counts(conn, transaction):
     row = conn.execute(
         """SELECT
              (SELECT COUNT(*) FROM sales_invoices i WHERE i.transaction_id = :id) AS invoice,
-             (SELECT COUNT(*) FROM payment_receipts r WHERE r.transaction_id = :id) AS receipt,
+             (SELECT COUNT(*) FROM payment_receipts r WHERE r.transaction_id = :id) +
+             (SELECT COUNT(*) FROM transaction_receipts tr WHERE tr.transaction_id = :id) AS receipt,
              (SELECT COUNT(*) FROM delivery_orders d WHERE d.transaction_id = :id) AS delivery_order,
              (SELECT COUNT(*) FROM purchase_orders po
                 WHERE po.transaction_id = :id OR po.invoice_id IN

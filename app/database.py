@@ -1531,6 +1531,37 @@ def create_tables():
         """
     )
 
+    # Direct ATCA receipt: additive child document of Transaction. It is
+    # intentionally isolated from invoice payment reconciliation.
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS transaction_receipts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nomor_kwitansi TEXT NOT NULL UNIQUE,
+            transaction_id INTEGER NOT NULL,
+            tanggal TEXT NOT NULL,
+            jenis_pembayaran TEXT NOT NULL DEFAULT 'Pembayaran',
+            metode_pembayaran TEXT NOT NULL,
+            bank TEXT,
+            nomor_referensi TEXT,
+            nominal INTEGER NOT NULL CHECK (nominal > 0),
+            untuk_pembayaran TEXT NOT NULL,
+            catatan TEXT,
+            status TEXT NOT NULL DEFAULT 'Diterbitkan',
+            created_by TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (transaction_id)
+                REFERENCES sales_transactions (id)
+                ON DELETE RESTRICT
+        )
+        """
+    )
+    cursor.execute(
+        """CREATE INDEX IF NOT EXISTS idx_transaction_receipts_transaction
+           ON transaction_receipts(transaction_id, status)"""
+    )
+
 
     # ==========================================================
     # ERP SETTINGS & OPTIONAL INVENTORY
@@ -1565,6 +1596,62 @@ def create_tables():
     ensure_column(conn, "erp_settings", "created_at", "TIMESTAMP")
     ensure_column(conn, "erp_settings", "updated_at", "TIMESTAMP")
     cursor.execute("INSERT OR IGNORE INTO erp_settings (id, inventory_enabled) VALUES (1, 0)")
+
+    # ==========================================================
+    # SPRINT 14 — ATCA MODULE REGISTRY
+    # Core modules are database-enforced as always enabled.
+    # ==========================================================
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS system_modules (
+            module_key TEXT PRIMARY KEY,
+            module_name TEXT NOT NULL,
+            module_type TEXT NOT NULL CHECK (module_type IN ('CORE', 'OPTIONAL')),
+            is_core INTEGER NOT NULL DEFAULT 0 CHECK (is_core IN (0, 1)),
+            is_enabled INTEGER NOT NULL DEFAULT 1 CHECK (is_enabled IN (0, 1)),
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_by TEXT,
+            CHECK (is_core = 0 OR is_enabled = 1)
+        )
+        """
+    )
+    module_seeds = (
+        ("customer", "Customer", "CORE", 1, 1, 10),
+        ("product", "Product", "CORE", 1, 1, 20),
+        ("transaction", "Transaction", "CORE", 1, 1, 30),
+        ("historical_purchase", "Historical Purchase", "CORE", 1, 1, 40),
+        ("dashboard", "Dashboard", "CORE", 1, 1, 50),
+        ("customer_360", "Customer 360", "CORE", 1, 1, 60),
+        ("quotation", "Quotation", "OPTIONAL", 0, 1, 110),
+        ("invoice", "Invoice", "OPTIONAL", 0, 1, 120),
+        ("receipt", "Receipt", "OPTIONAL", 0, 1, 130),
+        ("delivery_order", "Delivery Order", "OPTIONAL", 0, 1, 140),
+        ("purchase_order", "Purchase Order", "OPTIONAL", 0, 1, 150),
+        ("inventory", "Inventory", "OPTIONAL", 0, 0, 160),
+        ("warehouse", "Warehouse", "OPTIONAL", 0, 1, 170),
+        ("accounting", "Accounting", "OPTIONAL", 0, 1, 180),
+        ("purchasing", "Purchasing", "OPTIONAL", 0, 1, 190)
+    )
+    cursor.executemany(
+        """INSERT OR IGNORE INTO system_modules (
+               module_key, module_name, module_type, is_core,
+               is_enabled, sort_order
+           ) VALUES (?, ?, ?, ?, ?, ?)""",
+        module_seeds,
+    )
+    # Preserve the legacy inventory setting on upgraded databases.
+    cursor.execute(
+        """UPDATE system_modules
+           SET is_enabled = COALESCE(
+               (SELECT inventory_enabled FROM erp_settings WHERE id = 1), 0
+           )
+           WHERE module_key = 'inventory'"""
+    )
+    cursor.execute(
+        """CREATE INDEX IF NOT EXISTS idx_system_modules_type_order
+           ON system_modules(module_type, sort_order)"""
+    )
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS warehouses (

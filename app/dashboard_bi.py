@@ -395,7 +395,7 @@ def _sales_performance(conn, filters):
     )
 
 
-def _customer_analytics(conn, filters):
+def _customer_analytics(conn, filters, include_finance=True):
     t_where, t_params = _transaction_where(filters, filters["start_date"], filters["end_date"])
     h_where, h_params = _historical_where(filters, filters["start_date"], filters["end_date"])
     customer_filter = ""
@@ -507,7 +507,7 @@ def _customer_analytics(conn, filters):
             ORDER BY c.nama COLLATE NOCASE LIMIT 10""",
         customer_filter_params,
     )
-    outstanding = _outstanding_customers(conn, filters)
+    outstanding = _outstanding_customers(conn, filters) if include_finance else []
     return {
         "new": int(customer_counts["new_count"] or 0),
         "existing": int(customer_counts["existing_count"] or 0),
@@ -954,8 +954,211 @@ def _filter_options(conn):
     }
 
 
-def build_executive_dashboard(conn, args=None, today=None):
+def _atca_filter_options(conn):
+    """Filter dimensions from ATCA core tables only."""
+    return {
+        "sales": [row[0] for row in conn.execute(
+            "SELECT DISTINCT referal FROM sales_transactions "
+            "WHERE referal IS NOT NULL AND TRIM(referal) != '' "
+            "ORDER BY referal COLLATE NOCASE"
+        ).fetchall()],
+        "customers": _rows(
+            conn,
+            "SELECT id, nama FROM customers WHERE status_aktif = 1 ORDER BY nama COLLATE NOCASE",
+        ),
+        "products": _rows(
+            conn,
+            "SELECT id, kode_produk, nama_produk FROM products "
+            "WHERE status_aktif = 1 ORDER BY nama_produk COLLATE NOCASE",
+        ),
+        "categories": _rows(
+            conn,
+            "SELECT id, nama FROM product_categories "
+            "WHERE status_aktif = 1 ORDER BY nama COLLATE NOCASE",
+        ),
+    }
+
+
+def _atca_sales_performance(conn, filters):
+    where, params = _transaction_where(
+        filters, filters["start_date"], filters["end_date"]
+    )
+    return _rows(
+        conn,
+        f"""WITH metrics AS (
+                SELECT COALESCE(NULLIF(t.referal, ''), 'Tanpa Sales') AS sales,
+                       COUNT(*) AS transaction_count,
+                       SUM(COALESCE(t.total_penjualan, 0)) AS revenue,
+                       SUM(COALESCE(t.margin, 0)) AS margin,
+                       AVG(COALESCE(t.total_penjualan, 0)) AS average_transaction
+                FROM sales_transactions t WHERE {where}
+                GROUP BY COALESCE(NULLIF(t.referal, ''), 'Tanpa Sales')
+            ), repeats AS (
+                SELECT sales, COUNT(*) AS repeat_customer FROM (
+                    SELECT COALESCE(NULLIF(t.referal, ''), 'Tanpa Sales') AS sales,
+                           t.customer_id
+                    FROM sales_transactions t WHERE {where}
+                      AND t.customer_id IS NOT NULL
+                    GROUP BY sales, t.customer_id HAVING COUNT(*) > 1
+                ) GROUP BY sales
+            )
+            SELECT metrics.sales, metrics.transaction_count,
+                   metrics.transaction_count AS closing,
+                   0 AS quotation_count, 100.0 AS conversion_rate,
+                   metrics.revenue, metrics.margin,
+                   COALESCE(repeats.repeat_customer, 0) AS repeat_customer,
+                   CAST(metrics.average_transaction AS INTEGER) AS average_transaction
+            FROM metrics LEFT JOIN repeats ON repeats.sales = metrics.sales
+            ORDER BY metrics.revenue DESC, metrics.sales COLLATE NOCASE""",
+        params + params,
+    )
+
+
+def _atca_funnel(conn, filters):
+    where, params = _transaction_where(
+        filters, filters["start_date"], filters["end_date"]
+    )
+    customer_conditions = [
+        "c.status_aktif = 1",
+        "date(c.created_at) BETWEEN date(?) AND date(?)",
+    ]
+    customer_params = [filters["start_date"], filters["end_date"]]
+    if filters["customer_id"]:
+        customer_conditions.append("c.id = ?")
+        customer_params.append(filters["customer_id"])
+    counts = (
+        _scalar(
+            conn,
+            f"SELECT COUNT(*) FROM customers c WHERE {' AND '.join(customer_conditions)}",
+            customer_params,
+        ),
+        _scalar(conn, f"SELECT COUNT(*) FROM sales_transactions t WHERE {where}", params),
+        _scalar(
+            conn,
+            f"SELECT COUNT(*) FROM sales_transactions t WHERE {where} "
+            "AND LOWER(COALESCE(t.status, '')) IN ('selesai', 'completed')",
+            params,
+        ),
+    )
+    stages = []
+    previous = None
+    for name, count in zip(("Customer", "Transaction", "Selesai"), counts):
+        conversion = (
+            100.0 if previous is None and count
+            else 100.0 * count / previous if previous else 0.0
+        )
+        stages.append(
+            {"stage": name, "count": count, "conversion_rate": round(conversion, 1)}
+        )
+        previous = count
+    return stages
+
+
+def _atca_recent_activity(conn, filters):
+    transaction_where, transaction_params = _transaction_where(
+        filters, filters["start_date"], filters["end_date"]
+    )
+    history_where, history_params = _historical_where(
+        filters, filters["start_date"], filters["end_date"]
+    )
+    return _rows(
+        conn,
+        f"""SELECT * FROM (
+                SELECT t.id, 'TRANSACTION' AS document_type,
+                       'recorded' AS event_type, c.nama AS customer_name,
+                       'Transaction ' || COALESCE(t.nomor_transaksi, '#' || t.id) AS description,
+                       NULL AS old_status, t.status AS new_status,
+                       COALESCE(t.referal, 'Sistem') AS created_by,
+                       t.tanggal AS created_at
+                FROM sales_transactions t
+                LEFT JOIN customers c ON c.id = t.customer_id
+                WHERE {transaction_where}
+                UNION ALL
+                SELECT h.id, 'HISTORICAL_PURCHASE', 'recorded', c.nama,
+                       'Historical Purchase ' || COALESCE(h.nama_produk_snapshot, 'produk'),
+                       NULL, 'Historical', 'Customer360', h.tanggal_pembelian
+                FROM customer_purchase_history h
+                LEFT JOIN customers c ON c.id = h.customer_id
+                WHERE {history_where}
+            ) ORDER BY created_at DESC, id DESC LIMIT 20""",
+        transaction_params + history_params,
+    )
+
+
+def build_atca_dashboard(conn, args=None, today=None):
+    """ATCA v1 read model: one core-only financial and analytics service."""
+    filters = resolve_dashboard_filters(args, today=today)
+    today_value = _iso_date(filters["today"])
+    month_start = date(today_value.year, today_value.month, 1).isoformat()
+    year_start = date(today_value.year, 1, 1).isoformat()
+    selected = _money_summary(conn, filters, filters["start_date"], filters["end_date"])
+    day = _money_summary(conn, filters, filters["today"], filters["today"])
+    month = _money_summary(conn, filters, month_start, filters["today"])
+    year = _money_summary(conn, filters, year_start, filters["today"])
+    customer = _customer_analytics(conn, filters, include_finance=False)
+    stale_alerts = _customer_analytics_stale_alert(conn, filters)
+    alerts = {
+        "overdue_invoice": [],
+        "stale_customer": stale_alerts,
+        "low_stock": [],
+        "late_po": [],
+        "expired_quotation": [],
+        "total": len(stale_alerts),
+        "level": "Info" if stale_alerts else "Safe",
+    }
+    financial = {
+        **selected,
+        "receivable": 0,
+        "outstanding_invoice": 0,
+        "purchase_order_value": 0,
+        "purchase_value": 0,
+    }
+    return {
+        "atca_mode": True,
+        "filters": filters,
+        "filter_options": _atca_filter_options(conn),
+        "kpis": {
+            "revenue_today": day["revenue"],
+            "revenue_month": month["revenue"],
+            "revenue_year": year["revenue"],
+            "margin_month": month["margin"],
+            "net_profit_month": month["net_profit"],
+            "new_customer": customer["new"],
+            "repeat_customer": customer["repeat"],
+            "active_quotation": 0,
+            "deal_quotation": 0,
+            "outstanding_invoice": 0,
+            "receivable": 0,
+            "purchase_outstanding": 0,
+            "stock_value": 0,
+            "low_stock": 0,
+            "selected_revenue": selected["revenue"],
+            "average_purchase": selected["average_transaction"],
+        },
+        "sales_performance": _atca_sales_performance(conn, filters),
+        "customer": customer,
+        "product": _product_analytics(conn, filters),
+        "funnel": _atca_funnel(conn, filters),
+        "financial": financial,
+        "purchase": {
+            "active": 0, "outstanding": 0, "completed": 0,
+            "value": 0, "suppliers": [], "top_by_count": None,
+            "top_by_value": None,
+        },
+        "inventory": {
+            "stock_in": 0, "stock_out": 0, "available": 0,
+            "low_stock": 0, "fast_moving": [], "slow_moving": [],
+        },
+        "recent_activity": _atca_recent_activity(conn, filters),
+        "alerts": alerts,
+        "trend": _monthly_trend(conn, filters),
+    }
+
+
+def build_executive_dashboard(conn, args=None, today=None, *, atca=False):
     """Return the complete dashboard read model using a fixed query plan."""
+    if atca:
+        return build_atca_dashboard(conn, args=args, today=today)
     filters = resolve_dashboard_filters(args, today=today)
     financial = _money_summary(conn, filters, filters["start_date"], filters["end_date"])
     invoice = _invoice_summary(conn, filters, filters["start_date"], filters["end_date"])
