@@ -87,7 +87,7 @@
     <nav>
         <a href="/dashboard">Dashboard</a><a href="/customers">Customer</a><a href="/products">Produk</a>
         {% if module_enabled('quotation') %}<a href="/quotations">Quotation</a>{% endif %}<a href="/transactions">Transaction</a>{% if module_enabled('receipt') %}<a href="/receipts">Receipt</a>{% endif %}
-        {% if module_enabled('delivery_order') %}<a href="/delivery-orders">Delivery</a>{% endif %}{% if module_enabled('purchase_order') %}<a href="/purchase-orders">Purchase</a>{% endif %}{% if module_enabled('inventory') %}<a href="/stocks">Stock</a>{% endif %}<a href="{{ url_for('module_manager_settings') }}">Module Manager</a>
+        {% if module_enabled('delivery_order') %}<a href="/delivery-orders">Delivery</a>{% endif %}{% if module_enabled('purchase_order') %}<a href="/purchase-orders">Purchase</a>{% endif %}{% if module_enabled('inventory') %}<a href="/stocks">Stock</a>{% endif %}<a href="{{ url_for('settings_home') }}">System</a>
     </nav>
 </header>
 <main>
