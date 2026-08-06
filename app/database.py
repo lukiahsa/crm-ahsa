@@ -1562,6 +1562,55 @@ def create_tables():
            ON transaction_receipts(transaction_id, status)"""
     )
 
+    # ==========================================================
+    # SPRINT 15 — TRANSACTION WORKSPACE
+    # Internal notes and attachments are additive workspace data. They are
+    # intentionally separate from sales_transactions.catatan so they never
+    # leak into existing print templates or financial/workflow engines.
+    # ==========================================================
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS transaction_workspace_notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            transaction_id INTEGER NOT NULL,
+            note_text TEXT NOT NULL,
+            created_by TEXT,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (transaction_id)
+                REFERENCES sales_transactions (id)
+                ON DELETE CASCADE
+        )
+        """
+    )
+    cursor.execute(
+        """CREATE INDEX IF NOT EXISTS idx_transaction_workspace_notes_tx
+           ON transaction_workspace_notes(transaction_id, created_at DESC, id DESC)"""
+    )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS transaction_attachments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            transaction_id INTEGER NOT NULL,
+            attachment_type TEXT NOT NULL DEFAULT 'Dokumen Lain',
+            original_filename TEXT NOT NULL,
+            stored_filename TEXT NOT NULL,
+            mime_type TEXT NOT NULL,
+            file_size INTEGER NOT NULL CHECK (file_size > 0),
+            sha256 TEXT NOT NULL,
+            content BLOB NOT NULL,
+            uploaded_by TEXT,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (transaction_id)
+                REFERENCES sales_transactions (id)
+                ON DELETE CASCADE
+        )
+        """
+    )
+    cursor.execute(
+        """CREATE INDEX IF NOT EXISTS idx_transaction_attachments_tx
+           ON transaction_attachments(transaction_id, created_at DESC, id DESC)"""
+    )
+
 
     # ==========================================================
     # ERP SETTINGS & OPTIONAL INVENTORY
