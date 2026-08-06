@@ -3,974 +3,326 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <title>Detail Transaksi</title>
-
+    <title>Transaction Workspace · {{ transaction['nomor_transaksi'] or '-' }}</title>
     <style>
-        * {
-            box-sizing: border-box;
+        :root {
+            --navy: #102a43;
+            --blue: #0b65c2;
+            --green: #198754;
+            --red: #b42318;
+            --amber: #b7791f;
+            --ink: #1f2933;
+            --muted: #66788a;
+            --line: #dce4ec;
+            --surface: #ffffff;
+            --canvas: #f3f6f9;
         }
-
-        body {
-            margin: 0;
-            font-family: Arial, sans-serif;
-            background: #f4f6f8;
-            color: #222;
-        }
-
-        .container {
-            width: 94%;
-            max-width: 1250px;
-            margin: 30px auto;
-        }
-
-        .page-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            gap: 20px;
-            margin-bottom: 20px;
-        }
-
-        .page-header h1 {
-            margin: 0 0 8px;
-        }
-
-        .page-header p {
-            margin: 0;
-            color: #666;
-        }
-
-        .header-actions {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-
-        .btn {
-            display: inline-block;
-            padding: 11px 17px;
-            border: none;
-            border-radius: 7px;
-            text-decoration: none;
-            cursor: pointer;
-            font-size: 14px;
-        }
-
-        .btn-primary {
-            background: #198754;
-            color: white;
-        }
-
-        .btn-secondary {
-            background: #6c757d;
-            color: white;
-        }
-
-        .btn-info {
-            background: #0d6efd;
-            color: white;
-        }
-
-        .btn-danger { background: #b42318; color: white; }
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: Arial, sans-serif; background: var(--canvas); color: var(--ink); }
+        a { color: inherit; }
+        .workspace { width: min(1500px, 96%); margin: 24px auto 48px; }
+        .topbar { display: flex; justify-content: space-between; gap: 18px; align-items: center; margin-bottom: 16px; }
+        .eyebrow { color: var(--blue); text-transform: uppercase; letter-spacing: .08em; font-size: 12px; font-weight: 700; }
+        h1 { margin: 5px 0 0; color: var(--navy); font-size: clamp(25px, 3vw, 38px); }
+        h2 { margin: 0 0 16px; color: var(--navy); font-size: 19px; }
+        h3 { margin: 0 0 8px; color: var(--navy); font-size: 15px; }
+        .muted { color: var(--muted); }
+        .btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 40px; padding: 9px 14px; border: 0; border-radius: 8px; color: white; background: var(--blue); font-size: 13px; font-weight: 700; text-decoration: none; cursor: pointer; }
+        .btn-secondary { background: #5f6c79; }
+        .btn-success { background: var(--green); }
+        .btn-danger { background: var(--red); }
+        .btn-outline { color: var(--navy); background: white; border: 1px solid var(--line); }
+        .btn-block { width: 100%; }
+        .badge { display: inline-flex; align-items: center; padding: 5px 10px; border-radius: 999px; background: #e8eef5; font-size: 12px; font-weight: 700; }
+        .badge-ok { color: #126b3c; background: #dff3e8; }
+        .badge-warn { color: #7a4b00; background: #fff1cc; }
+        .badge-off { color: #5f6c79; background: #edf1f4; }
+        .shell { display: grid; grid-template-columns: minmax(0, 1fr) 310px; gap: 18px; align-items: start; }
+        .stack { display: grid; gap: 18px; }
+        .card { background: var(--surface); border: 1px solid #e5ebf0; border-radius: 12px; padding: 20px; box-shadow: 0 2px 10px rgba(16, 42, 67, .05); }
+        .action-panel { position: sticky; top: 16px; }
+        .action-list { display: grid; gap: 9px; }
+        .action-list form { margin: 0; }
+        .header-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+        .metric { min-width: 0; padding: 13px; border: 1px solid var(--line); border-radius: 9px; background: #fbfcfd; }
+        .metric-label { display: block; margin-bottom: 6px; color: var(--muted); font-size: 12px; }
+        .metric-value { display: block; color: var(--navy); font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; }
+        .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+        .summary-list { display: grid; grid-template-columns: 1fr; }
+        .summary-row { display: flex; justify-content: space-between; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--line); }
+        .summary-row strong { color: var(--navy); text-align: right; }
+        .summary-row.emphasis { font-size: 16px; }
+        .document-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+        .document-status { padding: 14px; border: 1px solid var(--line); border-radius: 9px; }
+        .document-status .number { min-height: 34px; margin-top: 9px; color: var(--blue); font-family: Consolas, monospace; font-size: 12px; overflow-wrap: anywhere; }
+        .split-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+        .timeline { position: relative; display: grid; gap: 0; }
+        .timeline-item { position: relative; padding: 0 0 18px 25px; border-left: 2px solid #d8e3ed; }
+        .timeline-item::before { content: ''; position: absolute; left: -6px; top: 3px; width: 10px; height: 10px; border-radius: 50%; background: var(--blue); }
+        .timeline-item:last-child { border-left-color: transparent; padding-bottom: 0; }
+        .timeline-meta { color: var(--muted); font-size: 11px; margin-top: 4px; }
+        .history-list, .note-list, .attachment-list { display: grid; gap: 9px; }
+        .history-row, .note-row, .attachment-row { display: flex; justify-content: space-between; gap: 14px; align-items: center; padding: 12px; border: 1px solid var(--line); border-radius: 8px; }
+        .history-row a, .attachment-row a { color: var(--blue); font-weight: 700; text-decoration: none; }
+        .history-meta { color: var(--muted); font-size: 12px; margin-top: 4px; }
+        .form-grid { display: grid; gap: 10px; margin-top: 14px; }
+        input, textarea, select { width: 100%; padding: 10px 11px; border: 1px solid #cbd6df; border-radius: 7px; background: white; font: inherit; }
+        textarea { min-height: 90px; resize: vertical; }
+        label { color: var(--muted); font-size: 12px; font-weight: 700; }
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; min-width: 950px; border-collapse: collapse; }
+        th, td { padding: 11px 9px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+        th { color: var(--navy); background: #f4f7fa; font-size: 12px; }
+        .money { text-align: right; }
+        .product-meta { color: var(--muted); font-size: 11px; white-space: normal; }
+        .empty { padding: 24px; color: var(--muted); text-align: center; }
         .workflow-alert { margin-top: 12px; padding: 12px; border-radius: 7px; background: #fff4e5; color: #7a4b00; white-space: pre-line; }
+        .workflow-actions { display: flex; flex-wrap: wrap; gap: 9px; }
+        .status-form { display: flex; gap: 8px; align-items: center; }
+        .status-form select { min-width: 125px; }
         dialog { border: 0; border-radius: 12px; padding: 0; width: min(520px, calc(100% - 30px)); box-shadow: 0 18px 55px rgba(0,0,0,.28); }
         dialog::backdrop { background: rgba(15,23,42,.58); }
         .dialog-body { padding: 22px; }
-        .dialog-body textarea, .dialog-body input { width: 100%; padding: 11px; border: 1px solid #ced4da; border-radius: 7px; margin: 7px 0 14px; }
-        .dialog-actions { display: flex; justify-content: flex-end; gap: 9px; }
-
-        .card {
-            background: white;
-            padding: 24px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
-            margin-bottom: 20px;
+        .dialog-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 12px; }
+        @media (max-width: 1120px) {
+            .header-grid, .document-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+            .shell { grid-template-columns: 1fr; }
+            .action-panel { position: static; order: -1; }
+            .action-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         }
-
-        .card h2 {
-            margin: 0 0 20px;
-            font-size: 21px;
+        @media (max-width: 760px) {
+            .workspace { width: min(100% - 22px, 1500px); margin-top: 14px; }
+            .topbar { align-items: flex-start; flex-direction: column; }
+            .header-grid, .document-grid, .summary-grid, .split-grid { grid-template-columns: 1fr; }
+            .action-list { grid-template-columns: 1fr 1fr; }
+            .summary-list { grid-template-columns: 1fr; }
+            .history-row, .note-row, .attachment-row { align-items: flex-start; flex-direction: column; }
         }
-
-        .info-grid {
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 18px;
-        }
-
-        .info-box {
-            padding: 14px;
-            background: #f8f9fa;
-            border-radius: 8px;
-        }
-
-        .info-label {
-            display: block;
-            margin-bottom: 6px;
-            color: #666;
-            font-size: 13px;
-        }
-
-        .info-value {
-            font-weight: bold;
-            line-height: 1.5;
-        }
-
-        .badge {
-            display: inline-block;
-            padding: 5px 10px;
-            border-radius: 20px;
-            background: #e2e3e5;
-            font-size: 12px;
-        }
-
-        .table-wrap {
-            overflow-x: auto;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            min-width: 1100px;
-        }
-
-        th,
-        td {
-            padding: 12px 10px;
-            border-bottom: 1px solid #ddd;
-            text-align: left;
-            white-space: nowrap;
-        }
-
-        th {
-            background: #f1f3f5;
-        }
-
-        .money {
-            text-align: right;
-        }
-
-        .product-name {
-            font-weight: bold;
-            margin-bottom: 4px;
-        }
-
-        .product-meta {
-            color: #666;
-            font-size: 12px;
-            white-space: normal;
-        }
-
-        .summary-layout {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) 430px;
-            gap: 25px;
-            align-items: start;
-        }
-
-        .notes-box {
-            min-height: 150px;
-            padding: 18px;
-            background: #f8f9fa;
-            border-radius: 8px;
-            line-height: 1.6;
-        }
-
-        .summary-box {
-            padding: 18px;
-            background: #f8f9fa;
-            border-radius: 8px;
-        }
-
-        .summary-row {
-            display: flex;
-            justify-content: space-between;
-            gap: 20px;
-            padding: 9px 0;
-            border-bottom: 1px solid #ddd;
-        }
-
-        .summary-row:last-child {
-            border-bottom: none;
-        }
-
-        .summary-row.total {
-            margin-top: 7px;
-            padding-top: 14px;
-            font-size: 19px;
-            font-weight: bold;
-        }
-
-        .positive {
-            color: #198754;
-        }
-
-        .negative {
-            color: #dc3545;
-        }
-
-        .empty {
-            text-align: center;
-            padding: 30px;
-            color: #777;
-        }
-
-
-        .status-panel {
-            display: flex;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-
-        .status-badge {
-            display: inline-block;
-            min-width: 90px;
-            padding: 7px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: bold;
-            text-align: center;
-        }
-
-        .status-draft {
-            color: #664d03;
-            background: #fff3cd;
-        }
-
-        .status-closing {
-            color: #084298;
-            background: #cfe2ff;
-        }
-
-        .status-invoice {
-            color: #432874;
-            background: #e2d9f3;
-        }
-
-        .status-terkirim {
-            color: #984c0c;
-            background: #ffe5d0;
-        }
-
-        .status-lunas {
-            color: #0f5132;
-            background: #d1e7dd;
-        }
-
-        .status-selesai {
-            color: #0f5132;
-            background: #bfe3cf;
-        }
-
-        .status-batal {
-            color: #842029;
-            background: #f8d7da;
-        }
-
-        .status-form {
-            display: flex;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 8px;
-        }
-
-        .status-select {
-            min-width: 130px;
-            padding: 9px 10px;
-            border: 1px solid #ced4da;
-            border-radius: 7px;
-            background: white;
-            font-size: 13px;
-        }
-
-        .btn-status {
-            padding: 9px 13px;
-            border: none;
-            border-radius: 7px;
-            background: #0d6efd;
-            color: white;
-            font-size: 13px;
-            cursor: pointer;
-        }
-
-        .btn-status:hover {
-            background: #0b5ed7;
-        }
-
-
-        .procurement-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 16px;
-        }
-
-        .document-box {
-            border: 1px solid #d9e2ea;
-            border-radius: 9px;
-            padding: 17px;
-            background: #f8fafc;
-        }
-
-        .document-box h3 {
-            margin: 0 0 8px;
-            color: #0b4388;
-        }
-
-        .document-box p {
-            color: #66737e;
-            line-height: 1.5;
-        }
-
-        .document-number {
-            font-family: Consolas, monospace;
-            color: #0b4388;
-            font-weight: bold;
-            margin-bottom: 12px;
-        }
-
-        .btn-po {
-            background: #087a37;
-            color: white;
-        }
-
-        .btn-po-view {
-            background: #0b4388;
-            color: white;
-        }
-
         @media print {
-            body {
-                background: white;
-            }
-
-            .header-actions,
-            .status-form {
-                display: none;
-            }
-
-            .container {
-                width: 100%;
-                max-width: none;
-                margin: 0;
-            }
-
-            .card {
-                box-shadow: none;
-                border: 1px solid #ddd;
-            }
-        }
-
-        @media (max-width: 850px) {
-            .page-header {
-                flex-direction: column;
-            }
-
-            .info-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .summary-layout {
-                grid-template-columns: 1fr;
-            }
+            body { background: white; }
+            .workspace { width: 100%; margin: 0; }
+            .action-panel, .topbar .btn, .status-form, .workflow-actions, .internal-only { display: none !important; }
+            .shell { display: block; }
+            .card { box-shadow: none; break-inside: avoid; }
         }
     </style>
 </head>
-
 <body>
-    <div class="container">
-
-        <div class="page-header">
-            <div>
-                <h1>
-                    {{ transaction["nomor_transaksi"] or "Detail Transaksi" }}
-                </h1>
-
-                <p>
-                    Detail transaksi dan snapshot produk pada saat penjualan.
-                </p>
-            </div>
-
-            <div class="header-actions">
-                <a
-                    href="{{ url_for('transactions') }}"
-                    class="btn btn-secondary"
-                >
-                    Kembali
-                </a>
-
-                <a
-                    href="{{ url_for('print_transaction', transaction_id=transaction['id']) }}"
-                    class="btn btn-info"
-                    target="_blank"
-                >
-                    Cetak
-                </a>
-
-                <a
-                    href="{{ url_for('add_transaction') }}"
-                    class="btn btn-primary"
-                >
-                    + Transaksi Baru
-                </a>
-            </div>
+<main class="workspace">
+    <header class="topbar">
+        <div>
+            <div class="eyebrow">Transaction Workspace</div>
+            <h1>{{ transaction['nomor_transaksi'] or 'Transaction' }}</h1>
         </div>
+        <a class="btn btn-outline" href="{{ url_for('transactions') }}">← Kembali ke Transaction</a>
+    </header>
 
-        <div class="card">
-            <h2>Informasi Transaksi</h2>
+    <div class="shell">
+        <div class="stack">
+            <section class="card" id="workspace-header">
+                <div class="header-grid">
+                    <div class="metric"><span class="metric-label">Nomor Transaction</span><span class="metric-value">{{ transaction['nomor_transaksi'] or '-' }}</span></div>
+                    <div class="metric"><span class="metric-label">Status</span><span class="metric-value"><span class="badge {% if transaction['status'] in ['Batal', 'Cancelled'] %}badge-warn{% else %}badge-ok{% endif %}">{{ transaction['status'] or 'Draft' }}</span></span></div>
+                    <div class="metric"><span class="metric-label">Tanggal</span><span class="metric-value">{{ transaction['tanggal'] or '-' }}</span></div>
+                    <div class="metric"><span class="metric-label">Sales</span><span class="metric-value">{{ transaction['referal'] or '-' }}</span></div>
+                    <div class="metric"><span class="metric-label">Customer</span><span class="metric-value">{{ transaction['customer_nama'] or '-' }}</span></div>
+                    <div class="metric"><span class="metric-label">PIC</span><span class="metric-value">{{ transaction['customer_pic'] or '-' }}</span></div>
+                    <div class="metric"><span class="metric-label">Nomor WA</span><span class="metric-value">{{ transaction['customer_whatsapp'] or '-' }}</span></div>
+                    <div class="metric"><span class="metric-label">Referal</span><span class="metric-value">{{ transaction['customer_sumber'] or '-' }}</span></div>
+                    <div class="metric"><span class="metric-label">Jenis</span><span class="metric-value">{{ transaction['jenis_penjualan'] or '-' }}</span></div>
+                    <div class="metric"><span class="metric-label">Margin / Profit</span><span class="metric-value">{{ format_rupiah(workspace['financial']['margin']) }} / {{ format_rupiah(workspace['financial']['profit']) }}</span></div>
+                </div>
+            </section>
 
-            <div class="info-grid">
-
-                <div class="info-box">
-                    <span class="info-label">Nomor Transaksi</span>
-
-                    <div class="info-value">
-                        {{ transaction["nomor_transaksi"] or "-" }}
+            <section class="summary-grid">
+                <div class="card" id="payment-summary">
+                    <h2>Payment Summary</h2>
+                    <div class="summary-list">
+                        <div class="summary-row"><span>Grand Total</span><strong>{{ format_rupiah(workspace['payment']['grand_total']) }}</strong></div>
+                        <div class="summary-row"><span>DP</span><strong>{{ format_rupiah(workspace['payment']['dp']) }}</strong></div>
+                        <div class="summary-row"><span>Pelunasan</span><strong>{{ format_rupiah(workspace['payment']['pelunasan']) }}</strong></div>
+                        <div class="summary-row"><span>Outstanding</span><strong>{{ format_rupiah(workspace['payment']['outstanding']) }}</strong></div>
+                        <div class="summary-row emphasis"><span>Status</span><strong><span class="badge {% if workspace['payment']['status'] == 'Lunas' %}badge-ok{% else %}badge-warn{% endif %}">{{ workspace['payment']['status'] }}</span></strong></div>
                     </div>
                 </div>
-
-                <div class="info-box">
-                    <span class="info-label">Tanggal</span>
-
-                    <div class="info-value">
-                        {{ transaction["tanggal"] or "-" }}
+                <div class="card" id="financial-summary">
+                    <h2>Financial Summary</h2>
+                    <div class="summary-list">
+                        <div class="summary-row"><span>Modal</span><strong>{{ format_rupiah(workspace['financial']['modal']) }}</strong></div>
+                        <div class="summary-row"><span>Subtotal</span><strong>{{ format_rupiah(workspace['financial']['subtotal']) }}</strong></div>
+                        <div class="summary-row"><span>Margin</span><strong>{{ format_rupiah(workspace['financial']['margin']) }}</strong></div>
+                        <div class="summary-row"><span>Profit</span><strong>{{ format_rupiah(workspace['financial']['profit']) }}</strong></div>
+                        <div class="summary-row emphasis"><span>Persentase Margin</span><strong>{{ '%.2f'|format(workspace['financial']['margin_percent']) }}%</strong></div>
                     </div>
                 </div>
+            </section>
 
-
-                {% set current_status = transaction["status"] or "Draft" %}
-
-                <div class="info-box">
-                    <span class="info-label">Status Transaksi</span>
-
-                    <div class="status-panel">
-                        <span
-                            class="
-                                status-badge
-                                {% if current_status == 'Draft' %}
-                                    status-draft
-                                {% elif current_status == 'Closing' %}
-                                    status-closing
-                                {% elif current_status == 'Invoice' %}
-                                    status-invoice
-                                {% elif current_status == 'Terkirim' %}
-                                    status-terkirim
-                                {% elif current_status == 'Lunas' %}
-                                    status-lunas
-                                {% elif current_status == 'Selesai' %}
-                                    status-selesai
-                                {% elif current_status in ['Batal', 'Cancelled'] %}
-                                    status-batal
-                                {% else %}
-                                    status-draft
-                                {% endif %}
-                            "
-                        >
-                            {{ current_status }}
-                        </span>
-
-                        {% if current_status != 'Cancelled' %}<form
-                            method="POST"
-                            action="{{ url_for('update_transaction_status', transaction_id=transaction['id']) }}"
-                            class="status-form"
-                        >
-                            <select
-                                name="status"
-                                class="status-select"
-                                required
-                            >
-                                {% for status_option in transaction_statuses %}{% if status_option != 'Cancelled' or current_status == 'Cancelled' %}
-                                    <option
-                                        value="{{ status_option }}"
-                                        {% if status_option == current_status %}
-                                            selected
-                                        {% endif %}
-                                    >
-                                        {{ status_option }}
-                                    </option>
-                                {% endif %}{% endfor %}
-                            </select>
-
-                            <button
-                                type="submit"
-                                class="btn-status"
-                            >
-                                Simpan Status
-                            </button>
-                        </form>{% endif %}
-                    </div>
-                </div>
-
-                <div class="info-box">
-                    <span class="info-label">Jenis Penjualan</span>
-
-                    <div class="info-value">
-                        <span class="badge">
-                            {{ transaction["jenis_penjualan"] or "-" }}
-                        </span>
-                    </div>
-                </div>
-
-                <div class="info-box">
-                    <span class="info-label">Customer</span>
-
-                    <div class="info-value">
-                        {{ transaction["customer_nama"] or "-" }}
-                    </div>
-                </div>
-
-                <div class="info-box">
-                    <span class="info-label">Instansi</span>
-
-                    <div class="info-value">
-                        {{ transaction["customer_instansi"] or "-" }}
-                    </div>
-                </div>
-
-                <div class="info-box">
-                    <span class="info-label">WhatsApp</span>
-
-                    <div class="info-value">
-                        {{ transaction["customer_whatsapp"] or "-" }}
-                    </div>
-                </div>
-
-                <div class="info-box">
-                    <span class="info-label">Kota</span>
-
-                    <div class="info-value">
-                        {{ transaction["customer_kota"] or "-" }}
-                    </div>
-                </div>
-
-                <div class="info-box">
-                    <span class="info-label">Referal</span>
-
-                    <div class="info-value">
-                        {{ transaction["referal"] or "-" }}
-                    </div>
-                </div>
-
-                <div class="info-box">
-                    <span class="info-label">Dibuat Pada</span>
-
-                    <div class="info-value">
-                        {{ transaction["created_at"] or "-" }}
-                    </div>
-                </div>
-
-                <div class="info-box">
-                    <span class="info-label">Tipe Data</span>
-                    <div class="info-value">
-                        {% if transaction['is_test'] %}
-                            <span class="badge">TRANSAKSI UJI COBA</span>
-                            {% if transaction['test_label'] %}<div>{{ transaction['test_label'] }}</div>{% endif %}
+            <section class="card" id="document-status">
+                <h2>Document Status</h2>
+                <div class="document-grid">
+                    {% for document in workspace['document_statuses'] %}
+                    <div class="document-status">
+                        <h3>{{ document['label'] }}</h3>
+                        {% if not document['enabled'] %}
+                            <span class="badge badge-off">Module OFF</span>
+                        {% elif document['created'] %}
+                            <span class="badge badge-ok">Sudah dibuat · {{ document['count'] }}</span>
                         {% else %}
-                            Transaksi Bisnis
+                            <span class="badge badge-warn">Belum dibuat</span>
                         {% endif %}
+                        <div class="number">{{ document['last_number'] or 'Belum ada nomor' }}</div>
                     </div>
+                    {% endfor %}
+                </div>
+            </section>
+
+            <section class="split-grid">
+                <div class="card" id="activity-timeline">
+                    <h2>Activity Timeline</h2>
+                    {% if workspace['timeline'] %}
+                    <div class="timeline">
+                        {% for event in workspace['timeline'] %}
+                        <div class="timeline-item">
+                            <strong>{{ event['event_type'] }}</strong>
+                            <div>{{ event['description'] }}</div>
+                            <div class="timeline-meta">{{ event['event_at'] or '-' }}{% if event['actor'] %} · {{ event['actor'] }}{% endif %}{% if event['document_type'] %} · {{ event['document_type'] }}{% endif %}</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}<div class="empty">Belum ada aktivitas.</div>{% endif %}
                 </div>
 
-            </div>
-        </div>
-
-        <div class="card">
-            <h2>Workflow</h2>
-            <div class="info-grid">
-                <div class="info-box"><span class="info-label">Status</span><div class="info-value">{% if workflow_revision['display_status'] == 'Revision Allowed' %}Revision Allowed{% elif transaction['status'] == 'Cancelled' %}Cancelled{% else %}Active{% endif %}</div></div>
-                {% if module_enabled('quotation') %}<div class="info-box"><span class="info-label">Quotation Terkait</span><div class="info-value">{% if workflow_revision['can_unlock']['quotation_id'] %}<a href="{{ url_for('quotation_detail', quotation_id=workflow_revision['can_unlock']['quotation_id']) }}">Buka Quotation</a>{% else %}-{% endif %}</div></div>{% endif %}
-                <div class="info-box"><span class="info-label">Revision</span><div class="info-value">{% if workflow_revision['revision'] %}Revision {{ workflow_revision['revision']['revision_no'] }}{% else %}-{% endif %}</div></div>
-            </div>
-            <div class="header-actions" style="margin-top:16px">
-                {% if workflow_revision['can_cancel']['allowed'] %}<button class="btn btn-danger" type="button" onclick="document.getElementById('cancel-dialog').showModal()">Cancel Transaction</button>{% endif %}
-                {% if module_enabled('quotation') and transaction['status'] == 'Cancelled' and workflow_revision['can_unlock']['allowed'] %}
-                <form method="post" action="{{ url_for('unlock_transaction_quotation', transaction_id=transaction['id']) }}" onsubmit="return confirm('Unlock quotation untuk revisi?');"><button class="btn btn-primary" type="submit">Unlock Quotation</button></form>
-                {% endif %}
-                {% if not transaction['is_test'] and mark_test_eligibility['allowed'] %}
-                <button class="btn btn-secondary" type="button" onclick="document.getElementById('mark-test-dialog').showModal()">Tandai Sebagai Transaksi Uji Coba</button>
-                {% endif %}
-                {% if transaction['is_test'] and purge_eligibility['allowed'] %}
-                <button class="btn btn-danger" type="button" onclick="document.getElementById('purge-test-dialog').showModal()">Hapus Transaksi Uji Coba</button>
-                {% endif %}
-            </div>
-            {% if not workflow_revision['can_cancel']['allowed'] and transaction['status'] != 'Cancelled' and workflow_revision['can_cancel']['message'] %}<div class="workflow-alert">{{ workflow_revision['can_cancel']['message'] }}</div>{% endif %}
-            {% if transaction['status'] == 'Cancelled' and not workflow_revision['can_unlock']['allowed'] and workflow_revision['can_unlock']['message'] %}<div class="workflow-alert">{{ workflow_revision['can_unlock']['message'] }}</div>{% endif %}
-            {% if transaction['is_test'] and not purge_eligibility['allowed'] %}<div class="workflow-alert"><strong>Purge ditolak:</strong>
-{% for reason in purge_eligibility['reasons'] %}• {{ reason }}
-{% endfor %}</div>{% endif %}
-        </div>
-
-        <dialog id="cancel-dialog"><div class="dialog-body"><h2>Batalkan Transaction</h2><p>Nomor Transaction: <strong>{{ transaction['nomor_transaksi'] }}</strong></p><form method="post" action="{{ url_for('cancel_transaction_workflow', transaction_id=transaction['id']) }}"><label for="cancel-reason"><strong>Alasan Pembatalan</strong></label><textarea id="cancel-reason" name="reason" required></textarea><div class="dialog-actions"><button class="btn btn-secondary" type="button" onclick="document.getElementById('cancel-dialog').close()">Kembali</button><button class="btn btn-danger" type="submit">Cancel</button></div></form></div></dialog>
-
-        {% if not transaction['is_test'] and mark_test_eligibility['allowed'] %}
-        <dialog id="mark-test-dialog"><div class="dialog-body"><h2>Tandai Sebagai Transaksi Uji Coba</h2><p><strong>{{ transaction['nomor_transaksi'] }}</strong></p><p>Tindakan ini tidak menghapus data. Setelah ditandai, purge tetap melalui pemeriksaan ulang.</p><form method="post" action="{{ url_for('mark_transaction_as_test', transaction_id=transaction['id']) }}"><label for="mark-test-reason"><strong>Alasan Penandaan</strong></label><textarea id="mark-test-reason" name="reason" required></textarea><div class="dialog-actions"><button class="btn btn-secondary" type="button" onclick="document.getElementById('mark-test-dialog').close()">Kembali</button><button class="btn btn-danger" type="submit">Tandai Uji Coba</button></div></form></div></dialog>
-        {% endif %}
-
-        {% if transaction['is_test'] and purge_eligibility['allowed'] %}
-        <dialog id="purge-test-dialog"><div class="dialog-body"><h2>Hapus Transaksi Uji Coba</h2><p>Hard delete hanya untuk transaksi test yang terisolasi.</p><div class="info-grid"><div class="info-box"><span class="info-label">Nomor</span><div class="info-value">{{ transaction['nomor_transaksi'] }}</div></div><div class="info-box"><span class="info-label">Customer</span><div class="info-value">{{ transaction['customer_nama'] or '-' }}</div></div><div class="info-box"><span class="info-label">Tanggal</span><div class="info-value">{{ transaction['tanggal'] }}</div></div><div class="info-box"><span class="info-label">Total</span><div class="info-value">{{ format_rupiah(transaction['total_penjualan']) }}</div></div><div class="info-box"><span class="info-label">Status</span><div class="info-value">{{ transaction['status'] }}</div></div></div><form method="post" action="{{ url_for('purge_transaction_test', transaction_id=transaction['id']) }}"><label for="purge-reason"><strong>Alasan Penghapusan</strong></label><textarea id="purge-reason" name="reason" required></textarea><label for="confirmation-number"><strong>Ketik nomor transaksi persis</strong></label><input id="confirmation-number" name="confirmation_number" required autocomplete="off"><label for="purged-by"><strong>Nama Pelaksana</strong></label><input id="purged-by" name="purged_by" value="Admin" required><div class="dialog-actions"><button class="btn btn-secondary" type="button" onclick="document.getElementById('purge-test-dialog').close()">Kembali</button><button class="btn btn-danger" type="submit">Hapus Permanen</button></div></form></div></dialog>
-        {% endif %}
-
-
-        <div class="card">
-            <h2>Alur Dokumen</h2>
-
-            <div class="procurement-grid">
-                {% if module_enabled('invoice') %}<div class="document-box">
-                    <h3>Invoice Penjualan</h3>
-
-                    {% if invoice %}
-                        <div class="document-number">
-                            {{ invoice["nomor_invoice"] }}
+                <div class="card" id="document-history">
+                    <h2>Document History</h2>
+                    {% if workspace['document_history'] %}
+                    <div class="history-list">
+                        {% for document in workspace['document_history'] %}
+                        <div class="history-row">
+                            <div>
+                                <strong>{{ document['label'] }}</strong>
+                                <div class="history-meta">{{ document['number'] or '-' }} · {{ document['status'] }} · {{ document['date'] or '-' }}</div>
+                            </div>
+                            {% if document['enabled'] %}<a href="{{ document['url'] }}" target="_blank">Buka dokumen →</a>{% else %}<span class="badge badge-off">Module OFF</span>{% endif %}
                         </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}<div class="empty">Belum ada dokumen child.</div>{% endif %}
+                </div>
+            </section>
 
-                        <p>
-                            Status pembayaran:
-                            <strong>{{ invoice["status_pembayaran"] }}</strong>
-                        </p>
+            <section class="split-grid internal-only">
+                <div class="card" id="workspace-notes">
+                    <h2>Notes <span class="muted">· Internal</span></h2>
+                    <div class="note-list">
+                        {% for note in workspace['notes'] %}
+                        <div class="note-row"><div><strong>{{ note['created_by'] or 'Sistem' }}</strong><div>{{ note['note_text'] }}</div><div class="history-meta">{{ note['created_at'] }}</div></div></div>
+                        {% else %}<div class="empty">Belum ada catatan internal.</div>{% endfor %}
+                    </div>
+                    <form class="form-grid" method="post" action="{{ url_for('add_transaction_workspace_note', transaction_id=transaction['id']) }}">
+                        <label for="note-text">Catatan internal — tidak tampil pada print</label>
+                        <textarea id="note-text" name="note_text" maxlength="4000" required></textarea>
+                        <input name="created_by" placeholder="Nama pembuat" value="Admin">
+                        <button class="btn btn-success" type="submit">Simpan Catatan</button>
+                    </form>
+                </div>
 
-                        <a
-                            href="{{ url_for('print_invoice', transaction_id=transaction['id']) }}"
-                            class="btn btn-info"
-                            target="_blank"
-                        >
-                            Buka Invoice
-                        </a>
-                    {% else %}
-                        <p>
-                            Invoice belum dibuat untuk transaksi ini.
-                        </p>
-                        <form method="post" action="{{ url_for('generate_invoice', transaction_id=transaction['id']) }}"><button class="btn btn-info" type="submit">Generate Invoice</button></form>
-                    {% endif %}
-                </div>{% endif %}
-
-                {% if module_enabled('delivery_order') %}<div class="document-box">
-                    <h3>Delivery Order</h3>
-                    {% if delivery_order %}
-                        <div class="document-number">{{ delivery_order["nomor_surat_jalan"] }}</div>
-                        <p>Status: <strong>{{ delivery_order["status"] }}</strong></p>
-                        <a href="{{ url_for('delivery_order_detail', delivery_order_id=delivery_order['id']) }}" class="btn btn-info">Buka Delivery Order</a>
-                    {% else %}
-                        <p>Delivery Order dapat dibuat langsung dari Transaction.</p>
-                        <form method="post" action="{{ url_for('generate_delivery_order', transaction_id=transaction['id']) }}"><button class="btn btn-info" type="submit">Generate Delivery Order</button></form>
-                    {% endif %}
-                </div>{% endif %}
-
-                {% if module_enabled('receipt') %}<div class="document-box">
-                    <h3>Receipt</h3>
-                    {% if transaction_receipt %}
-                        <div class="document-number">{{ transaction_receipt["nomor_kwitansi"] }}</div>
-                        <p>Nominal: <strong>{{ format_rupiah(transaction_receipt["nominal"]) }}</strong></p>
-                        <a href="{{ url_for('transaction_receipt_detail', receipt_id=transaction_receipt['id']) }}" class="btn btn-info">Buka Receipt</a>
-                    {% else %}
-                        <p>Receipt dapat dibuat langsung tanpa membuat Invoice.</p>
-                        <a href="{{ url_for('generate_transaction_receipt', transaction_id=transaction['id']) }}" class="btn btn-info">Generate Receipt</a>
-                    {% endif %}
-                </div>{% endif %}
-
-                {% if module_enabled('purchase_order') %}<div class="document-box">
-                    <h3>Purchase Order</h3>
-
-                    {% if purchase_order %}
-                        <div class="document-number">
-                            {{ purchase_order["nomor_po"] }}
+                <div class="card" id="transaction-attachments">
+                    <h2>Attachment</h2>
+                    <div class="attachment-list">
+                        {% for attachment in workspace['attachments'] %}
+                        <div class="attachment-row">
+                            <div><strong>{{ attachment['attachment_type'] }}</strong><div>{{ attachment['original_filename'] }}</div><div class="history-meta">{{ (attachment['file_size'] / 1024)|round(1) }} KB · {{ attachment['uploaded_by'] or 'Sistem' }} · {{ attachment['created_at'] }}</div></div>
+                            <a href="{{ url_for('download_transaction_attachment', transaction_id=transaction['id'], attachment_id=attachment['id']) }}">Unduh</a>
                         </div>
+                        {% else %}<div class="empty">Belum ada attachment.</div>{% endfor %}
+                    </div>
+                    <form class="form-grid" method="post" enctype="multipart/form-data" action="{{ url_for('upload_transaction_attachment', transaction_id=transaction['id']) }}">
+                        <label for="attachment-type">Jenis dokumen</label>
+                        <select id="attachment-type" name="attachment_type">{% for type in attachment_types %}<option>{{ type }}</option>{% endfor %}</select>
+                        <label for="attachment-file">PDF, foto, atau dokumen pendukung · maksimal 10 MB</label>
+                        <input id="attachment-file" type="file" name="attachment" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx" required>
+                        <input name="uploaded_by" placeholder="Nama pengunggah" value="Admin">
+                        <button class="btn btn-success" type="submit">Upload Attachment</button>
+                    </form>
+                </div>
+            </section>
 
-                        <p>
-                            Supplier:
-                            <strong>{{ purchase_order["supplier_nama_snapshot"] }}</strong>
-                            <br>
-                            Status:
-                            <strong>{{ purchase_order["status"] }}</strong>
-                        </p>
+            <section class="card" id="customer-snapshot">
+                <h2>Customer Snapshot</h2>
+                {% if workspace['customer_snapshot'] %}
+                <div class="header-grid">
+                    <div class="metric"><span class="metric-label">Customer</span><span class="metric-value"><a href="{{ url_for('customer_detail', customer_id=workspace['customer_snapshot']['customer_id']) }}">{{ workspace['customer_snapshot']['customer_name'] }}</a></span></div>
+                    <div class="metric"><span class="metric-label">Repeat Customer</span><span class="metric-value">{{ 'Ya' if workspace['customer_snapshot']['is_repeat_customer'] else 'Belum' }}</span></div>
+                    <div class="metric"><span class="metric-label">Historical Purchase</span><span class="metric-value">{{ workspace['customer_snapshot']['historical_purchase_count'] }} order</span></div>
+                    <div class="metric"><span class="metric-label">Total Omzet</span><span class="metric-value">{{ format_rupiah(workspace['customer_snapshot']['total_revenue']) }}</span></div>
+                    <div class="metric"><span class="metric-label">Last Order</span><span class="metric-value">{{ workspace['customer_snapshot']['last_order'] or '-' }}</span></div>
+                    <div class="metric"><span class="metric-label">Top Product</span><span class="metric-value">{{ workspace['customer_snapshot']['top_product'] or '-' }}</span></div>
+                </div>
+                {% else %}<div class="empty">Customer tidak terhubung.</div>{% endif %}
+            </section>
 
-                        <a
-                            href="{{ url_for('purchase_order_detail', purchase_order_id=purchase_order['id']) }}"
-                            class="btn btn-po-view"
-                        >
-                            Buka Purchase Order
-                        </a>
-                    {% else %}
-                        <p>
-                            Purchase Order belum dibuat. Semua item dan harga modal
-                            disalin langsung dari Transaction.
-                        </p>
-
-                        <a
-                            href="{{ url_for('generate_purchase_order_from_invoice', transaction_id=transaction['id']) }}"
-                            class="btn btn-po"
-                        >
-                            Generate Purchase Order
-                        </a>
-                    {% endif %}
-                </div>{% endif %}
-            </div>
-        </div>
-
-        <div class="card">
-            <h2>Item Produk</h2>
-
-            <div class="table-wrap">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>No.</th>
-                            <th>Kode</th>
-                            <th>Produk</th>
-                            <th>Qty</th>
-                            <th>Satuan</th>
-                            <th class="money">Harga Jual</th>
-                            <th class="money">Subtotal</th>
-                            <th class="money">Harga Modal</th>
-                            <th class="money">Total Modal</th>
-                            <th class="money">Margin Item</th>
-                        </tr>
-                    </thead>
-
-                    <tbody>
-                        {% if items %}
-                            {% for item in items %}
-                                <tr>
-                                    <td>{{ loop.index }}</td>
-
-                                    <td>
-                                        {{ item["kode_produk_snapshot"] or "-" }}
-                                    </td>
-
-                                    <td>
-                                        <div class="product-name">
-                                            {{ item["nama_produk_snapshot"] }}
-                                        </div>
-
-                                        <div class="product-meta">
-                                            {% if item["kategori_snapshot"] %}
-                                                {{ item["kategori_snapshot"] }}
-                                            {% endif %}
-
-                                            {% if item["brand_snapshot"] %}
-                                                • {{ item["brand_snapshot"] }}
-                                            {% endif %}
-
-                                            {% if item["varian_snapshot"] %}
-                                                • {{ item["varian_snapshot"] }}
-                                            {% endif %}
-
-                                            {% if item["warna_snapshot"] %}
-                                                • {{ item["warna_snapshot"] }}
-                                            {% endif %}
-
-                                            {% if item["ukuran_snapshot"] %}
-                                                • {{ item["ukuran_snapshot"] }}
-                                            {% endif %}
-                                        </div>
-                                    </td>
-
-                                    <td>{{ item["qty"] }}</td>
-
-                                    <td>
-                                        {{ item["satuan_snapshot"] or "Unit" }}
-                                    </td>
-
-                                    <td class="money">
-                                        Rp
-                                        {{
-                                            "{:,.0f}".format(
-                                                item["harga_jual_satuan"] or 0
-                                            ).replace(",", ".")
-                                        }}
-                                    </td>
-
-                                    <td class="money">
-                                        Rp
-                                        {{
-                                            "{:,.0f}".format(
-                                                item["subtotal_penjualan"] or 0
-                                            ).replace(",", ".")
-                                        }}
-                                    </td>
-
-                                    <td class="money">
-                                        Rp
-                                        {{
-                                            "{:,.0f}".format(
-                                                item["harga_modal_satuan"] or 0
-                                            ).replace(",", ".")
-                                        }}
-                                    </td>
-
-                                    <td class="money">
-                                        Rp
-                                        {{
-                                            "{:,.0f}".format(
-                                                item["subtotal_modal"] or 0
-                                            ).replace(",", ".")
-                                        }}
-                                    </td>
-
-                                    <td class="money">
-                                        Rp
-                                        {{
-                                            "{:,.0f}".format(
-                                                item["margin_item"] or 0
-                                            ).replace(",", ".")
-                                        }}
-                                    </td>
-                                </tr>
-                            {% endfor %}
-                        {% else %}
+            <section class="card" id="transaction-items">
+                <h2>Item Transaction</h2>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>No.</th><th>Kode</th><th>Produk</th><th>Qty</th><th>Satuan</th><th class="money">Harga Jual</th><th class="money">Subtotal</th><th class="money">Modal</th><th class="money">Margin</th></tr></thead>
+                        <tbody>
+                        {% for item in items %}
                             <tr>
-                                <td colspan="10" class="empty">
-                                    Belum ada item pada transaksi ini.
-                                </td>
+                                <td>{{ loop.index }}</td><td>{{ item['kode_produk_snapshot'] or '-' }}</td>
+                                <td><strong>{{ item['nama_produk_snapshot'] }}</strong><div class="product-meta">{{ item['kategori_snapshot'] or '' }}{% if item['warna_snapshot'] %} · {{ item['warna_snapshot'] }}{% endif %}{% if item['ukuran_snapshot'] %} · {{ item['ukuran_snapshot'] }}{% endif %}</div></td>
+                                <td>{{ item['qty'] }}</td><td>{{ item['satuan_snapshot'] or 'Unit' }}</td>
+                                <td class="money">{{ format_rupiah(item['harga_jual_satuan']) }}</td><td class="money">{{ format_rupiah(item['subtotal_penjualan']) }}</td><td class="money">{{ format_rupiah(item['subtotal_modal']) }}</td><td class="money">{{ format_rupiah(item['margin_item']) }}</td>
                             </tr>
-                        {% endif %}
-                    </tbody>
-                </table>
-            </div>
+                        {% else %}<tr><td class="empty" colspan="9">Belum ada item.</td></tr>{% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="card" id="workflow-control">
+                <h2>Workflow Control</h2>
+                <div class="workflow-actions">
+                    {% if transaction['status'] != 'Cancelled' %}
+                    <form class="status-form" method="post" action="{{ url_for('update_transaction_status', transaction_id=transaction['id']) }}">
+                        <select name="status" required>{% for option in transaction_statuses %}{% if option != 'Cancelled' or transaction['status'] == 'Cancelled' %}<option value="{{ option }}" {% if option == transaction['status'] %}selected{% endif %}>{{ option }}</option>{% endif %}{% endfor %}</select>
+                        <button class="btn" type="submit">Simpan Status</button>
+                    </form>
+                    {% endif %}
+                    {% if workflow_revision['can_cancel']['allowed'] %}<button class="btn btn-danger" type="button" onclick="document.getElementById('cancel-dialog').showModal()">Cancel Transaction</button>{% endif %}
+                    {% if module_enabled('quotation') and transaction['status'] == 'Cancelled' and workflow_revision['can_unlock']['allowed'] %}<form method="post" action="{{ url_for('unlock_transaction_quotation', transaction_id=transaction['id']) }}"><button class="btn btn-success" type="submit">Unlock Quotation</button></form>{% endif %}
+                    {% if not transaction['is_test'] and mark_test_eligibility['allowed'] %}<button class="btn btn-secondary" type="button" onclick="document.getElementById('mark-test-dialog').showModal()">Tandai Sebagai Transaksi Uji Coba</button>{% endif %}
+                    {% if transaction['is_test'] and purge_eligibility['allowed'] %}<button class="btn btn-danger" type="button" onclick="document.getElementById('purge-test-dialog').showModal()">Hapus Transaksi Uji Coba</button>{% endif %}
+                </div>
+                {% if not workflow_revision['can_cancel']['allowed'] and transaction['status'] != 'Cancelled' and workflow_revision['can_cancel']['message'] %}<div class="workflow-alert">{{ workflow_revision['can_cancel']['message'] }}</div>{% endif %}
+                {% if transaction['is_test'] and not purge_eligibility['allowed'] %}<div class="workflow-alert"><strong>Purge ditolak:</strong>{% for reason in purge_eligibility['reasons'] %}\n• {{ reason }}{% endfor %}</div>{% endif %}
+            </section>
         </div>
 
-        <div class="card">
-            <h2>Ringkasan Transaksi</h2>
-
-            <div class="summary-layout">
-
-                <div>
-                    <span class="info-label">Catatan Transaksi</span>
-
-                    <div class="notes-box">
-                        {{ transaction["catatan"] or "Tidak ada catatan." }}
-                    </div>
-
-                    <br>
-
-                    <span class="info-label">Keterangan Biaya</span>
-
-                    <div class="notes-box">
-                        {{
-                            transaction["keterangan_biaya"]
-                            or "Tidak ada keterangan biaya."
-                        }}
-                    </div>
-                </div>
-
-                <div class="summary-box">
-
-                    <div class="summary-row">
-                        <span>Total Penjualan</span>
-
-                        <strong>
-                            Rp
-                            {{
-                                "{:,.0f}".format(
-                                    transaction["total_penjualan"] or 0
-                                ).replace(",", ".")
-                            }}
-                        </strong>
-                    </div>
-
-                    <div class="summary-row">
-                        <span>Admin Marketplace</span>
-
-                        <strong>
-                            Rp
-                            {{
-                                "{:,.0f}".format(
-                                    transaction["admin_fee"] or 0
-                                ).replace(",", ".")
-                            }}
-                        </strong>
-                    </div>
-
-                    <div class="summary-row">
-                        <span>Potongan</span>
-
-                        <strong>
-                            Rp
-                            {{
-                                "{:,.0f}".format(
-                                    transaction["potongan"] or 0
-                                ).replace(",", ".")
-                            }}
-                        </strong>
-                    </div>
-
-                    <div class="summary-row">
-                        <span>Jumlah Diterima</span>
-
-                        <strong>
-                            Rp
-                            {{
-                                "{:,.0f}".format(
-                                    transaction["jumlah_diterima"] or 0
-                                ).replace(",", ".")
-                            }}
-                        </strong>
-                    </div>
-
-                    <div class="summary-row">
-                        <span>Total Modal</span>
-
-                        <strong>
-                            Rp
-                            {{
-                                "{:,.0f}".format(
-                                    transaction["total_modal"] or 0
-                                ).replace(",", ".")
-                            }}
-                        </strong>
-                    </div>
-
-                    <div class="summary-row">
-                        <span>Margin Kotor</span>
-
-                        <strong>
-                            Rp
-                            {{
-                                "{:,.0f}".format(
-                                    transaction["margin"] or 0
-                                ).replace(",", ".")
-                            }}
-                        </strong>
-                    </div>
-
-                    <div class="summary-row">
-                        <span>Biaya Lain</span>
-
-                        <strong>
-                            Rp
-                            {{
-                                "{:,.0f}".format(
-                                    transaction["biaya_lain"] or 0
-                                ).replace(",", ".")
-                            }}
-                        </strong>
-                    </div>
-
-                    <div class="summary-row total">
-                        <span>Laba Bersih</span>
-
-                        <strong
-                            class="
-                            {% if (transaction['laba_bersih'] or 0) >= 0 %}
-                                positive
-                            {% else %}
-                                negative
-                            {% endif %}
-                            "
-                        >
-                            Rp
-                            {{
-                                "{:,.0f}".format(
-                                    transaction["laba_bersih"] or 0
-                                ).replace(",", ".")
-                            }}
-                        </strong>
-                    </div>
-
-                </div>
+        <aside class="card action-panel" id="action-panel">
+            <h2>Action Panel</h2>
+            <div class="action-list">
+                {% if module_enabled('invoice') %}
+                    {% if workspace['documents']['invoices'] %}<a class="btn btn-block" target="_blank" href="{{ url_for('print_invoice', transaction_id=transaction['id']) }}">Buka Invoice</a>{% else %}<form method="post" action="{{ url_for('generate_invoice', transaction_id=transaction['id']) }}"><button class="btn btn-block" type="submit">Generate Invoice</button></form>{% endif %}
+                {% endif %}
+                {% if module_enabled('receipt') %}
+                    {% if workspace['documents']['receipts'] %}{% set receipt = workspace['documents']['receipts'][0] %}<a class="btn btn-block" href="{% if receipt['receipt_source'] == 'TRANSACTION_RECEIPT' %}{{ url_for('transaction_receipt_detail', receipt_id=receipt['id']) }}{% else %}{{ url_for('receipt_detail', receipt_id=receipt['id']) }}{% endif %}">Buka Receipt</a>{% else %}<a class="btn btn-block" href="{{ url_for('generate_transaction_receipt', transaction_id=transaction['id']) }}">Generate Receipt</a>{% endif %}
+                {% endif %}
+                {% if module_enabled('delivery_order') %}
+                    {% if workspace['documents']['delivery_orders'] %}<a class="btn btn-block" href="{{ url_for('delivery_order_detail', delivery_order_id=workspace['documents']['delivery_orders'][0]['id']) }}">Buka Delivery Order</a>{% else %}<form method="post" action="{{ url_for('generate_delivery_order', transaction_id=transaction['id']) }}"><button class="btn btn-block" type="submit">Generate Delivery Order</button></form>{% endif %}
+                {% endif %}
+                {% if module_enabled('purchase_order') %}
+                    {% if workspace['documents']['purchase_orders'] %}<a class="btn btn-block" href="{{ url_for('purchase_order_detail', purchase_order_id=workspace['documents']['purchase_orders'][0]['id']) }}">Buka Purchase Order</a>{% else %}<a class="btn btn-block" href="{{ url_for('generate_purchase_order_from_invoice', transaction_id=transaction['id']) }}">Generate Purchase Order</a>{% endif %}
+                {% endif %}
+                <a class="btn btn-secondary btn-block" target="_blank" href="{{ url_for('print_transaction', transaction_id=transaction['id']) }}">Print</a>
+                {% if whatsapp_url %}<a class="btn btn-success btn-block" target="_blank" rel="noopener" href="{{ whatsapp_url }}">WhatsApp</a>{% else %}<span class="btn btn-secondary btn-block" aria-disabled="true">WhatsApp tidak tersedia</span>{% endif %}
             </div>
-        </div>
-
+        </aside>
     </div>
+
+    <dialog id="cancel-dialog"><div class="dialog-body"><h2>Batalkan Transaction</h2><p>{{ transaction['nomor_transaksi'] }}</p><form method="post" action="{{ url_for('cancel_transaction_workflow', transaction_id=transaction['id']) }}"><textarea name="reason" placeholder="Alasan pembatalan" required></textarea><div class="dialog-actions"><button class="btn btn-secondary" type="button" onclick="this.closest('dialog').close()">Kembali</button><button class="btn btn-danger" type="submit">Cancel</button></div></form></div></dialog>
+    {% if not transaction['is_test'] and mark_test_eligibility['allowed'] %}<dialog id="mark-test-dialog"><div class="dialog-body"><h2>Tandai Transaksi Uji Coba</h2><form method="post" action="{{ url_for('mark_transaction_as_test', transaction_id=transaction['id']) }}"><textarea name="reason" required></textarea><div class="dialog-actions"><button class="btn btn-secondary" type="button" onclick="this.closest('dialog').close()">Kembali</button><button class="btn btn-danger" type="submit">Tandai Uji Coba</button></div></form></div></dialog>{% endif %}
+    {% if transaction['is_test'] and purge_eligibility['allowed'] %}<dialog id="purge-test-dialog"><div class="dialog-body"><h2>Hapus Transaksi Uji Coba</h2><p>{{ transaction['nomor_transaksi'] }} · {{ transaction['customer_nama'] or '-' }} · {{ format_rupiah(transaction['total_penjualan']) }}</p><form method="post" action="{{ url_for('purge_transaction_test', transaction_id=transaction['id']) }}"><textarea name="reason" placeholder="Alasan" required></textarea><input name="confirmation_number" placeholder="Ketik nomor transaksi" required><input name="purged_by" value="Admin" required><div class="dialog-actions"><button class="btn btn-secondary" type="button" onclick="this.closest('dialog').close()">Kembali</button><button class="btn btn-danger" type="submit">Hapus Permanen</button></div></form></div></dialog>{% endif %}
+</main>
 </body>
 </html>

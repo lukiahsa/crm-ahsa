@@ -16,10 +16,10 @@ from customer_360 import get_customer_360
 
 
 PRINT_HASHES = {
-    "quotation_print.html": "aa1e06fadd7c92eda999ce6d203aba92341ca4df222e7fdcaf214d4fff927fd4",
-    "invoice_print.html": "4a79d98c15052b2229d52095050664a8b0b2709ae810e5e7b34b0fc74f6637e2",
-    "receipt_print.html": "7f77c0bbb71c24f14720fff3a42eaa66357be4fcdd3078e2478cb7c4556b21cc",
-    "delivery_order_print.html": "fcf647739fce72ac0a40166510502b4889922d13e966a433b55dbf92105b684a",
+    "quotation_print.html": "dfbf494b864cfe360466c56e7cfe4a9856fbcab270f2c37f6b21bdbdca61d622",
+    "invoice_print.html": "7d2dd66793137bacae464d9dd09036733f1d7785cb77fca4772ed6d775dc55e8",
+    "receipt_print.html": "4b29a0eaa4a59999d96778045b98e8165058c7859c790ad5c56b90aada2ba6a4",
+    "delivery_order_print.html": "ac33d7a218eba2cc70f306004e1779781bdb64c6c6fa0960e55dbf82ac36f8b5",
 }
 
 

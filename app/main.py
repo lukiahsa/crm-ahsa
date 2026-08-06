@@ -5,8 +5,9 @@ import hmac
 import io
 import sqlite3
 from datetime import datetime
+from urllib.parse import quote
 
-from flask import Flask, abort, g, jsonify, redirect, render_template, request, url_for
+from flask import Flask, abort, g, jsonify, redirect, render_template, request, send_file, url_for
 from werkzeug.utils import secure_filename
 
 from customer_import import (
@@ -51,6 +52,15 @@ from test_transaction_purge import (
     can_purge_test_transaction,
     mark_test_transaction,
     purge_test_transaction,
+)
+from transaction_workspace import (
+    ATTACHMENT_TYPES,
+    MAX_ATTACHMENT_BYTES,
+    TransactionWorkspaceError,
+    add_transaction_attachment,
+    add_workspace_note,
+    get_transaction_attachment,
+    get_transaction_workspace,
 )
 from quotation_master import (
     customer_search_result,
@@ -3369,94 +3379,41 @@ def transaction_detail(transaction_id):
         DOCUMENT_TYPE_TRANSACTION,
         conn=conn,
     )
-
-    transaction = conn.execute(
-        """
-        SELECT
-            sales_transactions.*,
-            customers.nama AS customer_nama,
-            customers.instansi AS customer_instansi,
-            customers.whatsapp AS customer_whatsapp,
-            customers.kota AS customer_kota
-
-        FROM sales_transactions
-
-        LEFT JOIN customers
-            ON sales_transactions.customer_id =
-               customers.id
-
-        WHERE sales_transactions.id = ?
-        """,
-        (transaction_id,),
-    ).fetchone()
-
-    if transaction is None:
+    states = getattr(g, "module_states", {})
+    workspace = get_transaction_workspace(conn, transaction_id, states)
+    if workspace is None:
         conn.close()
-
         return "Transaksi tidak ditemukan", 404
 
-    items = conn.execute(
-        """
-        SELECT *
-        FROM sales_transaction_items
-        WHERE transaction_id = ?
-        ORDER BY id ASC
-        """,
-        (transaction_id,),
-    ).fetchall()
-
-    states = getattr(g, "module_states", {})
-    invoice = None
-    if states.get("invoice", {}).get("enabled", True):
-        invoice = conn.execute(
-            """SELECT * FROM sales_invoices WHERE transaction_id = ?""",
-            (transaction_id,),
-        ).fetchone()
-
-    purchase_order = None
-    if states.get("purchase_order", {}).get("enabled", True):
-        purchase_order = conn.execute(
-            """
-            SELECT *
-            FROM purchase_orders
-            WHERE transaction_id = ?
-            ORDER BY id DESC
-            LIMIT 1
-            """,
-            (transaction_id,),
-        ).fetchone()
-
-    delivery_order = None
-    if states.get("delivery_order", {}).get("enabled", True):
-        delivery_order = conn.execute(
-            """SELECT * FROM delivery_orders
-               WHERE transaction_id = ? ORDER BY id DESC LIMIT 1""",
-            (transaction_id,),
-        ).fetchone()
-
-    transaction_receipt = None
-    if states.get("receipt", {}).get("enabled", True):
-        transaction_receipt = conn.execute(
-            """SELECT * FROM transaction_receipts
-               WHERE transaction_id = ? AND status != 'Void'
-               ORDER BY id DESC LIMIT 1""",
-            (transaction_id,),
-        ).fetchone()
+    transaction = workspace["transaction"]
 
     workflow_revision = transaction_revision_context(conn, transaction_id)
     purge_eligibility = can_purge_test_transaction(conn, transaction_id)
     mark_test_eligibility = can_mark_test_transaction(conn, transaction_id)
+
+    phone = normalize_whatsapp(transaction.get("customer_whatsapp"))
+    whatsapp_url = None
+    if phone["valid"]:
+        message = (
+            f"Halo {transaction.get('customer_nama') or ''}, "
+            f"kami menghubungi terkait transaksi "
+            f"{transaction.get('nomor_transaksi') or ''}."
+        )
+        whatsapp_url = f"https://wa.me/{phone['normalized']}?text={quote(message)}"
+
+    for document in workspace["document_history"]:
+        document["url"] = url_for(
+            document["endpoint"],
+            **{document["parameter"]: document["id"]},
+        )
 
     conn.close()
 
     return render_template(
         "transaction_detail.html",
         transaction=transaction,
-        items=items,
-        invoice=invoice,
-        purchase_order=purchase_order,
-        delivery_order=delivery_order,
-        transaction_receipt=transaction_receipt,
+        items=workspace["items"],
+        workspace=workspace,
         transaction_statuses=TRANSACTION_STATUSES,
         invoice_payment_statuses=INVOICE_PAYMENT_STATUSES,
         identity=transaction_identity,
@@ -3464,6 +3421,81 @@ def transaction_detail(transaction_id):
         purge_eligibility=purge_eligibility,
         mark_test_eligibility=mark_test_eligibility,
         format_rupiah=format_rupiah,
+        whatsapp_url=whatsapp_url,
+        attachment_types=ATTACHMENT_TYPES,
+    )
+
+
+@app.route(
+    "/transactions/<int:transaction_id>/workspace-notes",
+    methods=["POST"],
+)
+def add_transaction_workspace_note(transaction_id):
+    conn = get_connection()
+    try:
+        add_workspace_note(
+            conn,
+            transaction_id,
+            request.form.get("note_text", ""),
+            request.form.get("created_by", ""),
+        )
+        conn.commit()
+    except (TransactionWorkspaceError, sqlite3.Error) as error:
+        conn.rollback()
+        conn.close()
+        return str(error), 400
+    conn.close()
+    return redirect(url_for("transaction_detail", transaction_id=transaction_id))
+
+
+@app.route(
+    "/transactions/<int:transaction_id>/attachments",
+    methods=["POST"],
+)
+def upload_transaction_attachment(transaction_id):
+    upload = request.files.get("attachment")
+    if upload is None or not upload.filename:
+        return "Pilih file attachment.", 400
+    original_filename = str(upload.filename).strip()
+    stored_filename = secure_filename(original_filename)
+    if not stored_filename:
+        return "Nama file attachment tidak valid.", 400
+    content = upload.stream.read(MAX_ATTACHMENT_BYTES + 1)
+    conn = get_connection()
+    try:
+        add_transaction_attachment(
+            conn,
+            transaction_id,
+            attachment_type=request.form.get("attachment_type", "Dokumen Lain"),
+            original_filename=original_filename,
+            stored_filename=stored_filename,
+            mime_type=upload.mimetype,
+            content=content,
+            uploaded_by=request.form.get("uploaded_by", ""),
+        )
+        conn.commit()
+    except (TransactionWorkspaceError, sqlite3.Error) as error:
+        conn.rollback()
+        conn.close()
+        return str(error), 400
+    conn.close()
+    return redirect(url_for("transaction_detail", transaction_id=transaction_id))
+
+
+@app.route(
+    "/transactions/<int:transaction_id>/attachments/<int:attachment_id>"
+)
+def download_transaction_attachment(transaction_id, attachment_id):
+    conn = get_connection()
+    attachment = get_transaction_attachment(conn, transaction_id, attachment_id)
+    conn.close()
+    if attachment is None:
+        return "Attachment tidak ditemukan.", 404
+    return send_file(
+        io.BytesIO(attachment["content"]),
+        mimetype=attachment["mime_type"],
+        download_name=attachment["stored_filename"],
+        as_attachment=True,
     )
 
 
