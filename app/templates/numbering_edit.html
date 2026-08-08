@@ -13,8 +13,10 @@ h1{margin:0 0 6px;color:#0b4388}.sub{color:#6d7882;margin-bottom:18px}.preview{p
 .actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px}.btn{padding:10px 15px;border:0;border-radius:7px;text-decoration:none;font-weight:800;cursor:pointer}.blue{background:#0b4388;color:#fff}.gray{background:#6d7882;color:#fff}
 @media(max-width:650px){.grid{grid-template-columns:1fr}.full{grid-column:auto}}
 </style>
+{% include '_mobile_head.html' %}
 </head>
 <body>
+{% include '_mobile_navigation.html' %}
 <main class="container"><section class="card">
 <h1>Edit Penomoran</h1>
 <div class="sub">{{ numbering["document_type"] }}</div>

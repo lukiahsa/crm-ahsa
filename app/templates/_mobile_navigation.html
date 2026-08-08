@@ -1,0 +1,23 @@
+<div class="mobile-app-nav" data-mobile-navigation>
+    <a class="mobile-app-brand" href="{{ url_for('dashboard') }}" aria-label="CRM Ahsa Equipment — Dashboard">
+        <span class="mobile-app-mark" aria-hidden="true">A</span>
+        <span><strong>CRM AHSA</strong><small>Daily Operation</small></span>
+    </a>
+    <button class="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="mobile-primary-menu" aria-label="Buka menu utama">
+        <span aria-hidden="true"></span><span aria-hidden="true"></span><span aria-hidden="true"></span>
+    </button>
+    <nav class="mobile-menu" id="mobile-primary-menu" aria-label="Navigasi utama" hidden>
+        <a class="{% if request.path in ['/', '/dashboard'] %}active{% endif %}" href="{{ url_for('dashboard') }}">Dashboard</a>
+        <a class="{% if request.path.startswith('/customers') %}active{% endif %}" href="{{ url_for('customers') }}">Customer</a>
+        <a class="{% if request.path.startswith('/products') %}active{% endif %}" href="{{ url_for('products') }}">Product</a>
+        {% if module_enabled('quotation') %}<a class="{% if request.path.startswith('/quotations') %}active{% endif %}" href="{{ url_for('quotations') }}">Quotation</a>{% endif %}
+        <a class="{% if request.path.startswith('/transactions') %}active{% endif %}" href="{{ url_for('transactions') }}">Transaction</a>
+        {% if module_enabled('invoice') %}<a class="{% if request.path.startswith('/invoices') %}active{% endif %}" href="{{ url_for('transactions') }}">Invoice</a>{% endif %}
+        {% if module_enabled('receipt') %}<a class="{% if request.path.startswith('/receipts') %}active{% endif %}" href="{{ url_for('receipts') }}">Receipt</a>{% endif %}
+        {% if module_enabled('delivery_order') %}<a class="{% if request.path.startswith('/delivery-orders') %}active{% endif %}" href="{{ url_for('delivery_orders') }}">Delivery Order</a>{% endif %}
+        {% if module_enabled('purchase_order') %}<a class="{% if request.path.startswith('/purchase-orders') %}active{% endif %}" href="{{ url_for('purchase_orders') }}">Purchase Order</a>{% endif %}
+        <a class="{% if request.path.startswith('/settings') %}active{% endif %}" href="{{ url_for('settings_home') }}">Settings</a>
+    </nav>
+</div>
+<script defer src="{{ url_for('static', filename='js/mobile.js') }}"></script>
+

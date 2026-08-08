@@ -14,8 +14,10 @@ table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{border:1px so
 .timeline{position:relative;margin-top:8px}.activity{display:grid;grid-template-columns:18px 1fr;gap:10px;padding-bottom:15px;position:relative}.activity:not(:last-child):before{content:"";position:absolute;left:8px;top:18px;bottom:0;width:2px;background:#d9e3ea}.dot{width:18px;height:18px;border-radius:50%;background:#0b4388;border:4px solid #dcecff;z-index:1}.activity-card{border:1px solid #d6e0e7;border-radius:8px;padding:10px;background:#fbfcfd}.activity-head{display:flex;justify-content:space-between;gap:10px;margin-bottom:4px}.activity-head strong{color:#0b4388}.activity-time{font-size:10px;color:#75818a}.activity-desc{font-size:12px}.activity-by{font-size:10px;color:#75818a;margin-top:5px}
 @media(max-width:800px){.top{flex-direction:column}.info,.bottom{grid-template-columns:1fr}.card{overflow:auto}table{min-width:850px}}
 </style>
+{% include '_mobile_head.html' %}
 </head>
 <body>
+{% include '_mobile_navigation.html' %}
 <main class="container">
 <div class="top">
 <div>
@@ -26,7 +28,7 @@ table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{border:1px so
 <div class="actions">
 <a class="btn gray" href="{{ url_for('delivery_orders') }}">Daftar</a>
 <a class="btn orange" href="{{ url_for('edit_delivery_order', delivery_order_id=delivery_order['id']) }}">Edit</a>
-<a class="btn blue" target="_blank" href="{{ url_for('print_delivery_order', delivery_order_id=delivery_order['id']) }}">📄 Preview PDF</a>
+<a class="btn blue" href="{{ url_for('document_preview', document_type='delivery-order', document_id=delivery_order['id']) }}">📄 Preview PDF</a>
 <a class="btn green" href="{{ url_for('transaction_detail', transaction_id=delivery_order['transaction_id']) }}">Lihat Transaksi</a>
 </div>
 </div>

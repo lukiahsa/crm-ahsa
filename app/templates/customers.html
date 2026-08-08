@@ -201,10 +201,11 @@
 }
 
 </style>
-
+{% include '_mobile_head.html' %}
 </head>
 
 <body>
+    {% include '_mobile_navigation.html' %}
     <header>
         <h1>CRM AHSA EQUIPMENT</h1>
         <p>Database Customer</p>
@@ -221,28 +222,28 @@
 
             <form method="post">
                 <div>
-                    <label>Nama Customer</label>
-                    <input type="text" name="nama" required>
+                    <label for="customer-name">Nama Customer</label>
+                    <input id="customer-name" type="text" name="nama" autocomplete="name" required>
                 </div>
 
                 <div>
-                    <label>Nomor WhatsApp</label>
-                    <input type="text" name="whatsapp">
+                    <label for="customer-whatsapp">Nomor WhatsApp</label>
+                    <input id="customer-whatsapp" type="tel" inputmode="tel" autocomplete="tel" name="whatsapp">
                 </div>
 
                 <div>
-                    <label>Perusahaan / Instansi</label>
-                    <input type="text" name="instansi">
+                    <label for="customer-company">Perusahaan / Instansi</label>
+                    <input id="customer-company" type="text" name="instansi" autocomplete="organization">
                 </div>
 
                 <div>
-                    <label>Kota / Kabupaten</label>
-                    <input type="text" name="kota">
+                    <label for="customer-city">Kota / Kabupaten</label>
+                    <input id="customer-city" type="text" name="kota" autocomplete="address-level2">
                 </div>
 
                 <div>
-                    <label>Produk</label>
-                    <select name="produk">
+                    <label for="customer-product">Produk</label>
+                    <select id="customer-product" name="produk">
                         <option value="">Pilih produk</option>
                         <option>Tempat Sampah</option>
                         <option>Tangga</option>
@@ -255,8 +256,8 @@
                 </div>
 
                 <div>
-                    <label>Sumber Lead</label>
-                    <select name="sumber">
+                    <label for="customer-source">Sumber Lead</label>
+                    <select id="customer-source" name="sumber">
                         <option value="">Pilih sumber</option>
                         <option>WhatsApp Organik</option>
                         <option>Google Ads</option>
@@ -269,8 +270,8 @@
                 </div>
 
                 <div>
-                    <label>Status</label>
-                    <select name="status">
+                    <label for="customer-status">Status</label>
+                    <select id="customer-status" name="status">
                         <option>Prospek</option>
                         <option>Follow Up</option>
                         <option>Penawaran</option>
@@ -282,11 +283,11 @@
                 </div>
 
                 <div class="full">
-                    <label>Catatan</label>
-                    <textarea name="catatan"></textarea>
+                    <label for="customer-notes">Catatan</label>
+                    <textarea id="customer-notes" name="catatan"></textarea>
                 </div>
 
-                <div class="full">
+                <div class="full mobile-save-bar">
                     <button type="submit">Simpan Customer</button>
                 </div>
             </form>

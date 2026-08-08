@@ -12,11 +12,13 @@
 .timeline{position:relative}.activity{display:grid;grid-template-columns:18px 1fr;gap:10px;padding-bottom:15px;position:relative}.activity:not(:last-child):before{content:"";position:absolute;left:8px;top:18px;bottom:0;width:2px;background:#d9e3ea}.dot{width:18px;height:18px;border-radius:50%;background:#0b4388;border:4px solid #dcecff;z-index:1}.activity-card{border:1px solid #d6e0e7;border-radius:8px;padding:10px;background:#fbfcfd}.activity-head{display:flex;justify-content:space-between}.activity-time{font-size:10px;color:#75818a}
 @media(max-width:800px){.top{flex-direction:column}.info,.summary{grid-template-columns:1fr}}
 </style>
+{% include '_mobile_head.html' %}
 </head>
 <body>
+{% include '_mobile_navigation.html' %}
 <main class="container">
 <div class="top"><div><div class="sub" style="font-weight:800;letter-spacing:1px">KWITANSI</div><h1>{{ receipt["nomor_kwitansi"] }}</h1><div class="sub">Bukti pembayaran resmi Ahsa Equipment</div></div>
-<div class="actions"><a class="btn gray" href="{{ url_for('receipts') }}">Daftar</a><a class="btn blue" target="_blank" href="{{ url_for('print_receipt', receipt_id=receipt['id']) }}">📄 Preview PDF</a></div></div>
+<div class="actions"><a class="btn gray" href="{{ url_for('receipts') }}">Daftar</a><a class="btn blue" href="{{ url_for('document_preview', document_type='receipt', document_id=receipt['id']) }}">📄 Preview PDF</a></div></div>
 
 <section class="card"><div class="info">
 <div class="box"><small>Customer</small><strong>{{ receipt["customer_nama"] or "-" }}</strong></div>

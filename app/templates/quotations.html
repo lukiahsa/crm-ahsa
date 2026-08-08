@@ -18,8 +18,10 @@ th,td{padding:12px;border-bottom:1px solid #e1e8ed;font-size:12px;text-align:lef
 .empty{text-align:center;padding:30px;color:#6c7882}.inline{display:inline}
 @media(max-width:1000px){.card{overflow:auto}table{min-width:1100px}.head{align-items:flex-start;flex-direction:column}}
 </style>
+{% include '_mobile_head.html' %}
 </head>
 <body>
+{% include '_mobile_navigation.html' %}
 <main class="container">
 <div class="head">
 <div><h1>Quotation / Penawaran</h1><div class="sub">Kelola penawaran Ahsa dan Denko dalam satu workflow ERP.</div></div>
@@ -46,7 +48,7 @@ th,td{padding:12px;border-bottom:1px solid #e1e8ed;font-size:12px;text-align:lef
 <div class="quick">
 <a class="btn light" href="{{ url_for('quotation_detail', quotation_id=quotation['id']) }}">👁 Detail</a>
 <a class="btn orange" href="{{ url_for('edit_quotation', quotation_id=quotation['id']) }}">✏ Edit</a>
-<a class="btn primary" target="_blank" href="{{ url_for('print_quotation', quotation_id=quotation['id']) }}">📄 PDF</a>
+<a class="btn primary" href="{{ url_for('document_preview', document_type='quotation', document_id=quotation['id']) }}">📄 PDF</a>
 <a class="btn green" target="_blank" href="{{ url_for('send_quotation_whatsapp', quotation_id=quotation['id']) }}">📲 WA</a>
 <form class="inline" method="POST" action="{{ url_for('duplicate_quotation', quotation_id=quotation['id']) }}">
 <button class="btn light" type="submit">📋 Duplikat</button>
