@@ -79,8 +79,10 @@
         @media(max-width:480px){ .filters,.kpi-grid,.funnel{grid-template-columns:1fr} }
         @media(prefers-color-scheme:dark){ :root{--bg:#0f1722;--panel:#182231;--text:#eef4fa;--muted:#a9b5c3;--line:#2b3b4d;--soft:#213248;--brand:#8dc9f3;--brand2:#70b8ea;--good:#6ce9ba;--warn:#fec84b;--danger:#fda29b} .filter-panel,.panel,.kpi{box-shadow:none}.badge.danger,.alert-count{background:#4a2528} }
     </style>
+    {% include '_mobile_head.html' %}
 </head>
 <body>
+{% include '_mobile_navigation.html' %}
 {% set d = dashboard %}
 <header>
     <div class="header-row"><div><h1>Executive Dashboard</h1><p>CRM AHSA EQUIPMENT · insight bisnis untuk Owner</p></div><div><span class="badge">READ ONLY</span></div></div>

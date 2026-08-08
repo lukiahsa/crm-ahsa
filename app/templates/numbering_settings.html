@@ -13,8 +13,10 @@
 .note{margin-top:15px;background:#fff8df;border:1px solid #efd97b;padding:12px;border-radius:8px;font-size:12px;line-height:1.5}
 @media(max-width:800px){.card{overflow-x:auto}.head{flex-direction:column}table{min-width:900px}}
 </style>
+{% include '_mobile_head.html' %}
 </head>
 <body>
+{% include '_mobile_navigation.html' %}
 <main class="container">
 <div class="head"><div><h1>🔢 Penomoran Dokumen</h1><div class="sub">Format nomor terpusat untuk seluruh modul ERP.</div></div><a class="btn gray" href="{{ url_for('settings_home') }}">Pengaturan ERP</a></div>
 <section class="card">
