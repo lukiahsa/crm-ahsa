@@ -8,8 +8,9 @@
 @media(max-width:1000px){.stats{grid-template-columns:repeat(3,1fr)}.filter{grid-template-columns:1fr 1fr}.card{overflow-x:auto}table{min-width:980px}.head{flex-direction:column}}
 @media(max-width:560px){.stats,.filter{grid-template-columns:1fr}}
 </style>
+{% include '_mobile_head.html' %}
 </head>
-<body><main class="container">
+<body>{% include '_mobile_navigation.html' %}<main class="container">
 <div class="head"><div><h1>📄 Purchase Order</h1><div class="sub">Kelola pesanan pembelian kepada supplier.</div></div><div><a class="btn gray" href="{{ url_for('dashboard') }}">Dashboard</a> <a class="btn blue" href="{{ url_for('add_purchase_order') }}">+ Buat PO</a></div></div>
 <section class="stats">
 <div class="stat"><small>Total PO</small><strong>{{ stats["total_po"] or 0 }}</strong></div>
@@ -29,7 +30,7 @@
 </form>
 <section class="card"><table><thead><tr><th>Nomor PO</th><th>Supplier</th><th>Tanggal</th><th>Estimasi Datang</th><th>Status</th><th>Grand Total</th><th>Aksi</th></tr></thead><tbody>
 {% for po in purchase_orders %}
-<tr><td class="code">{{ po["nomor_po"] }}</td><td><div class="supplier">{{ po["supplier_nama_snapshot"] }}</div><div class="muted">{{ po["kode_supplier"] }}</div></td><td>{{ format_tanggal_indonesia(po["tanggal"]) }}</td><td>{{ format_tanggal_indonesia(po["estimasi_datang"]) if po["estimasi_datang"] else "-" }}</td><td><span class="badge {% if po['status']=='Batal' %}batal{% elif po['status']=='Selesai' %}selesai{% endif %}">{{ po["status"] }}</span></td><td><strong>{{ format_rupiah(po["grand_total"]) }}</strong></td><td class="actions"><a class="btn gray" href="{{ url_for('purchase_order_detail', purchase_order_id=po['id']) }}">Detail</a><a class="btn gray" href="{{ url_for('print_purchase_order', purchase_order_id=po['id']) }}" target="_blank">Print</a></td></tr>
+<tr><td class="code">{{ po["nomor_po"] }}</td><td><div class="supplier">{{ po["supplier_nama_snapshot"] }}</div><div class="muted">{{ po["kode_supplier"] }}</div></td><td>{{ format_tanggal_indonesia(po["tanggal"]) }}</td><td>{{ format_tanggal_indonesia(po["estimasi_datang"]) if po["estimasi_datang"] else "-" }}</td><td><span class="badge {% if po['status']=='Batal' %}batal{% elif po['status']=='Selesai' %}selesai{% endif %}">{{ po["status"] }}</span></td><td><strong>{{ format_rupiah(po["grand_total"]) }}</strong></td><td class="actions"><a class="btn gray" href="{{ url_for('purchase_order_detail', purchase_order_id=po['id']) }}">Detail</a><a class="btn gray" href="{{ url_for('document_preview', document_type='purchase-order', document_id=po['id']) }}">Print</a></td></tr>
 {% else %}<tr><td colspan="7" class="empty">Belum ada Purchase Order.</td></tr>{% endfor %}
 </tbody></table></section>
 </main></body></html>

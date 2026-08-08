@@ -106,8 +106,10 @@
             .card { box-shadow: none; break-inside: avoid; }
         }
     </style>
+    {% include '_mobile_head.html' %}
 </head>
 <body>
+{% include '_mobile_navigation.html' %}
 <main class="workspace">
     <header class="topbar">
         <div>
@@ -303,7 +305,7 @@
             <h2>Action Panel</h2>
             <div class="action-list">
                 {% if module_enabled('invoice') %}
-                    {% if workspace['documents']['invoices'] %}<a class="btn btn-block" target="_blank" href="{{ url_for('print_invoice', transaction_id=transaction['id']) }}">Buka Invoice</a>{% else %}<form method="post" action="{{ url_for('generate_invoice', transaction_id=transaction['id']) }}"><button class="btn btn-block" type="submit">Generate Invoice</button></form>{% endif %}
+                    {% if workspace['documents']['invoices'] %}<a class="btn btn-block" href="{{ url_for('document_preview', document_type='invoice', document_id=transaction['id']) }}">Buka Invoice</a>{% else %}<form method="post" action="{{ url_for('generate_invoice', transaction_id=transaction['id']) }}"><button class="btn btn-block" type="submit">Generate Invoice</button></form>{% endif %}
                 {% endif %}
                 {% if module_enabled('receipt') %}
                     {% if workspace['documents']['receipts'] %}{% set receipt = workspace['documents']['receipts'][0] %}<a class="btn btn-block" href="{% if receipt['receipt_source'] == 'TRANSACTION_RECEIPT' %}{{ url_for('transaction_receipt_detail', receipt_id=receipt['id']) }}{% else %}{{ url_for('receipt_detail', receipt_id=receipt['id']) }}{% endif %}">Buka Receipt</a>{% else %}<a class="btn btn-block" href="{{ url_for('generate_transaction_receipt', transaction_id=transaction['id']) }}">Generate Receipt</a>{% endif %}
@@ -314,7 +316,7 @@
                 {% if module_enabled('purchase_order') %}
                     {% if workspace['documents']['purchase_orders'] %}<a class="btn btn-block" href="{{ url_for('purchase_order_detail', purchase_order_id=workspace['documents']['purchase_orders'][0]['id']) }}">Buka Purchase Order</a>{% else %}<a class="btn btn-block" href="{{ url_for('generate_purchase_order_from_invoice', transaction_id=transaction['id']) }}">Generate Purchase Order</a>{% endif %}
                 {% endif %}
-                <a class="btn btn-secondary btn-block" target="_blank" href="{{ url_for('print_transaction', transaction_id=transaction['id']) }}">Print</a>
+                <a class="btn btn-secondary btn-block" href="{{ url_for('document_preview', document_type='transaction', document_id=transaction['id']) }}">Print</a>
                 {% if whatsapp_url %}<a class="btn btn-success btn-block" target="_blank" rel="noopener" href="{{ whatsapp_url }}">WhatsApp</a>{% else %}<span class="btn btn-secondary btn-block" aria-disabled="true">WhatsApp tidak tersedia</span>{% endif %}
             </div>
         </aside>

@@ -16,8 +16,10 @@ table{width:100%;border-collapse:collapse}th,td{padding:12px;border-bottom:1px s
 .generate-grid{display:grid;grid-template-columns:1fr auto;gap:10px;padding:16px 18px}.generate-grid select{padding:11px;border:1px solid #ccd7df;border-radius:7px}
 @media(max-width:1000px){.card{overflow:auto}table{min-width:1100px}.head{align-items:flex-start;flex-direction:column}.generate-grid{grid-template-columns:1fr}}
 </style>
+{% include '_mobile_head.html' %}
 </head>
 <body>
+{% include '_mobile_navigation.html' %}
 <main class="container">
 <div class="head">
 <div><h1>🧾 Kwitansi Pembayaran</h1><div class="sub">Kwitansi DP, termin, dan pelunasan yang terhubung ke invoice.</div></div>
@@ -56,7 +58,7 @@ table{width:100%;border-collapse:collapse}th,td{padding:12px;border-bottom:1px s
 <td><span class="badge {{ receipt['status']|lower }}">{{ receipt["status"] }}</span></td>
 <td><div class="quick">
 <a class="btn light" href="{{ url_for('receipt_detail', receipt_id=receipt['id']) }}">👁 Detail</a>
-<a class="btn primary" target="_blank" href="{{ url_for('print_receipt', receipt_id=receipt['id']) }}">📄 PDF</a>
+<a class="btn primary" href="{{ url_for('document_preview', document_type='receipt', document_id=receipt['id']) }}">📄 PDF</a>
 {% if receipt["status"] == "Void" %}
 <form class="inline" method="POST" action="{{ url_for('delete_receipt', receipt_id=receipt['id']) }}" onsubmit="return confirm('Hapus kwitansi ini?');"><button class="btn red" type="submit">🗑 Hapus</button></form>
 {% endif %}

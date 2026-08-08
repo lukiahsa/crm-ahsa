@@ -18,8 +18,10 @@ table{width:100%;border-collapse:collapse}th,td{padding:12px;border-bottom:1px s
 .generate-grid{display:grid;grid-template-columns:1fr auto;gap:10px;padding:16px 18px}.generate-grid select{padding:11px;border:1px solid #ccd7df;border-radius:7px;min-width:0}
 @media(max-width:1000px){.card{overflow:auto}table{min-width:1100px}.head{align-items:flex-start;flex-direction:column}.generate-grid{grid-template-columns:1fr}}
 </style>
+{% include '_mobile_head.html' %}
 </head>
 <body>
+{% include '_mobile_navigation.html' %}
 <main class="container">
 <div class="head">
 <div>
@@ -80,7 +82,7 @@ table{width:100%;border-collapse:collapse}th,td{padding:12px;border-bottom:1px s
 <div class="quick">
 <a class="btn light" href="{{ url_for('delivery_order_detail', delivery_order_id=delivery_order['id']) }}">👁 Detail</a>
 <a class="btn orange" href="{{ url_for('edit_delivery_order', delivery_order_id=delivery_order['id']) }}">✏ Edit</a>
-<a class="btn primary" target="_blank" href="{{ url_for('print_delivery_order', delivery_order_id=delivery_order['id']) }}">📄 PDF</a>
+<a class="btn primary" href="{{ url_for('document_preview', document_type='delivery-order', document_id=delivery_order['id']) }}">📄 PDF</a>
 {% if delivery_order["status"] in ("Draft", "Batal") %}
 <form class="inline" method="POST" action="{{ url_for('delete_delivery_order', delivery_order_id=delivery_order['id']) }}" onsubmit="return confirm('Hapus surat jalan ini?');">
 <button class="btn red" type="submit">🗑 Hapus</button>

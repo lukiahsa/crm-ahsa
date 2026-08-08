@@ -120,9 +120,11 @@
             .field.full { grid-column: auto; }
         }
     </style>
+    {% include '_mobile_head.html' %}
 </head>
 
 <body>
+    {% include '_mobile_navigation.html' %}
     <main class="container">
         <div class="topbar">
             <div>
@@ -225,7 +227,7 @@
                 <div class="actions">
                     <a
                         class="btn btn-secondary"
-                        href="{{ url_for('print_invoice', transaction_id=transaction['id']) }}"
+                        href="{{ url_for('document_preview', document_type='invoice', document_id=transaction['id']) }}"
                     >
                         Batal
                     </a>

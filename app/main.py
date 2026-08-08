@@ -133,6 +133,84 @@ def inject_module_policy():
     }
 
 
+DOCUMENT_PREVIEW_TYPES = {
+    "quotation": {
+        "label": "Quotation",
+        "module": "quotation",
+        "endpoint": "print_quotation",
+        "parameter": "quotation_id",
+        "back_endpoint": "quotation_detail",
+        "back_parameter": "quotation_id",
+    },
+    "transaction": {
+        "label": "Transaction",
+        "module": None,
+        "endpoint": "print_transaction",
+        "parameter": "transaction_id",
+        "back_endpoint": "transaction_detail",
+        "back_parameter": "transaction_id",
+    },
+    "invoice": {
+        "label": "Invoice",
+        "module": "invoice",
+        "endpoint": "print_invoice",
+        "parameter": "transaction_id",
+        "back_endpoint": "transaction_detail",
+        "back_parameter": "transaction_id",
+    },
+    "receipt": {
+        "label": "Receipt / Kwitansi",
+        "module": "receipt",
+        "endpoint": "print_receipt",
+        "parameter": "receipt_id",
+        "back_endpoint": "receipt_detail",
+        "back_parameter": "receipt_id",
+    },
+    "delivery-order": {
+        "label": "Delivery Order",
+        "module": "delivery_order",
+        "endpoint": "print_delivery_order",
+        "parameter": "delivery_order_id",
+        "back_endpoint": "delivery_order_detail",
+        "back_parameter": "delivery_order_id",
+    },
+    "purchase-order": {
+        "label": "Purchase Order",
+        "module": "purchase_order",
+        "endpoint": "print_purchase_order",
+        "parameter": "purchase_order_id",
+        "back_endpoint": "purchase_order_detail",
+        "back_parameter": "purchase_order_id",
+    },
+}
+
+
+@app.route("/document-preview/<document_type>/<int:document_id>")
+def document_preview(document_type, document_id):
+    """Mobile-safe shell around immutable print templates."""
+    preview = DOCUMENT_PREVIEW_TYPES.get(document_type)
+    if preview is None:
+        abort(404)
+    required_module = preview["module"]
+    module_state = getattr(g, "module_states", {}).get(required_module)
+    if required_module and module_state and not module_state["enabled"]:
+        abort(404)
+    print_url = url_for(
+        preview["endpoint"],
+        **{preview["parameter"]: document_id},
+    )
+    back_url = url_for(
+        preview["back_endpoint"],
+        **{preview["back_parameter"]: document_id},
+    )
+    return render_template(
+        "document_preview.html",
+        document_label=preview["label"],
+        print_url=print_url,
+        back_url=back_url,
+    )
+
+
 
 
 

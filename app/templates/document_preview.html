@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>Preview {{ document_label }}</title>
+    <style>
+        *{box-sizing:border-box}body{margin:0;background:#dfe6ec;color:#17212b;font-family:Arial,sans-serif}
+        .preview-bar{position:sticky;z-index:20;top:0;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#fff;box-shadow:0 3px 12px rgba(15,42,67,.16)}
+        .preview-title{min-width:0}.preview-title strong,.preview-title small{display:block}.preview-title small{margin-top:3px;color:#687784}
+        .preview-actions{display:flex;gap:8px}.btn{display:inline-flex;min-height:44px;align-items:center;justify-content:center;padding:9px 14px;border:0;border-radius:8px;background:#0b4388;color:#fff;font-weight:800;text-decoration:none;cursor:pointer}.gray{background:#64748b}
+        .frame-shell{width:min(1100px,100%);height:calc(100dvh - 66px);margin:0 auto;padding:12px}.preview-frame{display:block;width:100%;height:100%;border:0;background:#fff;box-shadow:0 3px 16px rgba(15,42,67,.16)}
+        @media(max-width:767px){.preview-bar{top:62px;align-items:stretch;flex-direction:column}.preview-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.frame-shell{height:calc(100dvh - 184px);padding:6px}.preview-title small{font-size:11px}}
+        @media print{.preview-bar{display:none}.frame-shell{width:100%;height:100vh;margin:0;padding:0}.preview-frame{box-shadow:none}}
+    </style>
+    {% include '_mobile_head.html' %}
+</head>
+<body class="mobile-preview-page">
+{% include '_mobile_navigation.html' %}
+<header class="preview-bar" aria-label="Kontrol preview dokumen">
+    <div class="preview-title"><strong>Preview {{ document_label }}</strong><small>Dokumen asli tidak diubah</small></div>
+    <div class="preview-actions">
+        <a class="btn gray" href="{{ back_url }}">Kembali</a>
+        <button class="btn" type="button" id="printDocument">Cetak / Simpan PDF</button>
+    </div>
+</header>
+<main class="frame-shell">
+    <iframe class="preview-frame" id="documentFrame" title="Dokumen {{ document_label }}" src="{{ print_url }}"></iframe>
+</main>
+<script>
+document.getElementById('printDocument').addEventListener('click',()=>{const frame=document.getElementById('documentFrame');frame.contentWindow.focus();frame.contentWindow.print();});
+</script>
+</body>
+</html>
