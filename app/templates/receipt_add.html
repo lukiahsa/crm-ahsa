@@ -12,8 +12,10 @@ label{display:block;font-weight:700;margin-bottom:6px;font-size:12px}input,selec
 .money{font-size:20px;color:#12933f;font-weight:900}.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.actions{display:flex;justify-content:flex-end;gap:9px}.btn{display:inline-block;padding:10px 15px;border:0;border-radius:7px;text-decoration:none;font-weight:800;cursor:pointer}.green{background:#159447;color:#fff}.gray{background:#6d7882;color:#fff}
 @media(max-width:800px){.grid,.summary{grid-template-columns:1fr}.full{grid-column:auto}.head{flex-direction:column}}
 </style>
+{% include '_mobile_head.html' %}
 </head>
 <body>
+{% include '_mobile_navigation.html' %}
 <main class="container">
 <div class="head"><div><div class="sub" style="font-weight:800;letter-spacing:1px">KWITANSI</div><h1>Buat Kwitansi Pembayaran</h1><div class="sub">{{ invoice["nomor_invoice"] }}</div></div><a class="btn gray" href="{{ url_for('receipts') }}">Daftar Kwitansi</a></div>
 <section class="card"><div class="title">Referensi Invoice</div>

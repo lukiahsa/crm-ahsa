@@ -114,9 +114,11 @@
             }
         }
     </style>
+{% include '_mobile_head.html' %}
 </head>
 
 <body>
+    {% include '_mobile_navigation.html' %}
     <header>
         <h1>CRM AHSA EQUIPMENT</h1>
         <p>Edit Customer</p>
@@ -133,8 +135,9 @@
 
             <form method="post">
                 <div>
-                    <label>Nama Customer</label>
+                    <label for="customer-name">Nama Customer</label>
                     <input
+                        id="customer-name"
                         type="text"
                         name="nama"
                         value="{{ customer['nama'] }}"
@@ -143,9 +146,12 @@
                 </div>
 
                 <div>
-                    <label>Nomor WhatsApp</label>
+                    <label for="customer-whatsapp">Nomor WhatsApp</label>
                     <input
-                        type="text"
+                        id="customer-whatsapp"
+                        type="tel"
+                        inputmode="tel"
+                        autocomplete="tel"
                         name="whatsapp"
                         value="{{ customer['whatsapp'] or '' }}"
                     >
@@ -166,8 +172,8 @@
                 </div>
 
                 <div>
-                    <label>Email</label>
-                    <input type="email" name="email" value="{{ customer['email'] or '' }}">
+                    <label for="customer-email">Email</label>
+                    <input id="customer-email" type="email" autocomplete="email" name="email" value="{{ customer['email'] or '' }}">
                 </div>
 
                 <div class="full">
